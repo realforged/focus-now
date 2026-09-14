@@ -35,6 +35,9 @@ function AppInner() {
   const [appLoading, setAppLoading] = useState<boolean>(true);
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const [showDietModalDirectly, setShowDietModalDirectly] = useState(false);
+  const [showJournalModalDirectly, setShowJournalModalDirectly] = useState(false);
+  const [showGoalsModalDirectly, setShowGoalsModalDirectly] = useState(false);
+  const [showTargetsModalDirectly, setShowTargetsModalDirectly] = useState(false);
 
   // Confirm dialog state
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -267,7 +270,8 @@ function AppInner() {
         repeat: habitData.repeat || 'Daily',
         timeOfDay: habitData.timeOfDay,
         enableFocusTimer: habitData.enableFocusTimer || false,
-        routineId: habitData.routineId
+        routineId: habitData.routineId,
+        subHabits: habitData.subHabits || [],
       };
 
       await api.createHabit(payload);
@@ -345,6 +349,7 @@ function AppInner() {
         timeOfDay: habitData.timeOfDay,
         enableFocusTimer: habitData.enableFocusTimer || false,
         routineId: habitData.routineId,
+        ...(habitData.subHabits !== undefined ? { subHabits: habitData.subHabits } : {}),
       };
 
       await api.updateHabit(id, payload);
@@ -520,6 +525,68 @@ function AppInner() {
     });
   };
 
+  // Reset 90-Day Mission countdown back to Day 1
+  const handleResetMission = async () => {
+    openConfirm({
+      title: 'Reset 90-Day Mission',
+      message: 'Reset your 90-Day Transformation countdown back to Day 1 (today)? You can lock in again with full focus.',
+      confirmLabel: 'Restart Day 1',
+      variant: 'danger',
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          await api.resetMission(dateToday);
+          localStorage.setItem('journey_start_date', dateToday);
+          await loadAllData();
+          toast.success('90-Day Mission restarted at Day 1! Stay consistent.');
+        } catch (err: any) {
+          toast.error('Failed to reset mission: ' + err.message);
+        }
+      },
+    });
+  };
+
+  // Sub-Habits management
+  const handleAddSubHabit = async (habitId: string, title: string) => {
+    try {
+      await api.addSubHabit(habitId, title);
+      const nextHabits = await api.getHabits();
+      setHabits(nextHabits);
+      toast.success('Action step added!');
+    } catch (err: any) {
+      toast.error('Failed to add step: ' + err.message);
+    }
+  };
+
+  const handleToggleSubHabit = async (habitId: string, subHabitId: string, dateStr: string) => {
+    try {
+      const { allSubHabitsDone } = await api.toggleSubHabit(habitId, subHabitId, dateStr);
+      const nextHabits = await api.getHabits();
+      setHabits(nextHabits);
+
+      const nextPoints = calculateTotalEarnedPoints(nextHabits, routines);
+      setUserPoints(nextPoints);
+      await api.syncJourney({ total_points: nextPoints });
+
+      if (allSubHabitsDone) {
+        toast.success('All action steps completed! Habit marked done.');
+      }
+    } catch (err: any) {
+      toast.error('Failed to toggle step: ' + err.message);
+    }
+  };
+
+  const handleDeleteSubHabit = async (habitId: string, subHabitId: string) => {
+    try {
+      await api.deleteSubHabit(habitId, subHabitId);
+      const nextHabits = await api.getHabits();
+      setHabits(nextHabits);
+      toast.info('Step removed.');
+    } catch (err: any) {
+      toast.error('Failed to delete step: ' + err.message);
+    }
+  };
+
 
   // Render Login/Register Overlay if not authenticated
   if (!token) {
@@ -575,9 +642,21 @@ function AppInner() {
             selectedCategoryId={selectedCategoryId}
             setSelectedCategoryId={setSelectedCategoryId}
             onDeleteHabit={handleDeleteHabit}
+            onEditHabit={openEditHabit}
             onCreateHabitInRoutine={handleCreateHabitInRoutine}
             showDietModalDirectly={showDietModalDirectly}
             onCloseDietModalDirectly={() => setShowDietModalDirectly(false)}
+            showJournalModalDirectly={showJournalModalDirectly}
+            onCloseJournalModalDirectly={() => setShowJournalModalDirectly(false)}
+            showGoalsModalDirectly={showGoalsModalDirectly}
+            onCloseGoalsModalDirectly={() => setShowGoalsModalDirectly(false)}
+            showTargetsModalDirectly={showTargetsModalDirectly}
+            onCloseTargetsModalDirectly={() => setShowTargetsModalDirectly(false)}
+            onResetMission={handleResetMission}
+            onAddSubHabit={handleAddSubHabit}
+            onToggleSubHabit={handleToggleSubHabit}
+            onDeleteSubHabit={handleDeleteSubHabit}
+            openCreateHabit={openCreateHabit}
           />
         )}
 
@@ -597,6 +676,9 @@ function AppInner() {
             setSelectedRoutineId={setSelectedRoutineId}
             selectedCategoryId={selectedCategoryId}
             setSelectedCategoryId={setSelectedCategoryId}
+            onAddSubHabit={handleAddSubHabit}
+            onToggleSubHabit={handleToggleSubHabit}
+            onDeleteSubHabit={handleDeleteSubHabit}
           />
         )}
 
@@ -605,6 +687,7 @@ function AppInner() {
             habits={habits}
             routines={routines}
             userPoints={userPoints}
+            onResetMission={handleResetMission}
           />
         )}
 
@@ -701,7 +784,7 @@ function AppInner() {
 
                 {/* Pillar Goal */}
                 <button
-                  onClick={() => { setIsAddMenuOpen(false); openCreateHabit(); }}
+                  onClick={() => { setIsAddMenuOpen(false); setTab('dashboard'); setShowGoalsModalDirectly(true); }}
                   className="p-4 rounded-2xl border border-gray-100 bg-gray-50 hover:bg-purple-50 hover:border-purple-200 text-left transition-all active:scale-[0.97] cursor-pointer"
                 >
                   <div className="w-11 h-11 rounded-xl bg-purple-100 flex items-center justify-center mb-3">
@@ -713,7 +796,7 @@ function AppInner() {
 
                 {/* Diet Targets */}
                 <button
-                  onClick={() => { setIsAddMenuOpen(false); setTab('dashboard'); setShowDietModalDirectly(true); }}
+                  onClick={() => { setIsAddMenuOpen(false); setTab('dashboard'); setShowTargetsModalDirectly(true); }}
                   className="p-4 rounded-2xl border border-gray-100 bg-gray-50 hover:bg-yellow-50 hover:border-yellow-200 text-left transition-all active:scale-[0.97] cursor-pointer"
                 >
                   <div className="w-11 h-11 rounded-xl bg-yellow-100 flex items-center justify-center mb-3">
@@ -737,7 +820,7 @@ function AppInner() {
 
                 {/* Journal */}
                 <button
-                  onClick={() => { setIsAddMenuOpen(false); }}
+                  onClick={() => { setIsAddMenuOpen(false); setTab('dashboard'); setShowJournalModalDirectly(true); }}
                   className="p-4 rounded-2xl border border-gray-100 bg-gray-50 hover:bg-indigo-50 hover:border-indigo-200 text-left transition-all active:scale-[0.97] cursor-pointer"
                 >
                   <div className="w-11 h-11 rounded-xl bg-indigo-100 flex items-center justify-center mb-3">
@@ -759,6 +842,7 @@ function AppInner() {
         routines={routines}
         onCreate={handleCreateHabitSubmit}
         onSave={handleUpdateHabitSubmit}
+        onDelete={handleDeleteHabit}
         habitToEdit={habitToEdit}
         prefilledRoutineId={prefilledRoutineId}
       />

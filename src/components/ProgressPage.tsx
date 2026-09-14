@@ -1,25 +1,22 @@
 import React from 'react';
-import { Sparkles, Flame, CheckCircle, TrendingUp, Calendar, Zap } from 'lucide-react';
+import { Sparkles, Flame, CheckCircle, TrendingUp, Calendar, Zap, RotateCcw, Target } from 'lucide-react';
 import { Habit, Routine } from '../types';
-import { dateToday } from '../data';
+import { dateToday, isHabitScheduledForDate } from '../data';
 
 interface ProgressPageProps {
   habits: Habit[];
   routines: Routine[];
   userPoints: number;
+  onResetMission?: () => void;
 }
 
-export default function ProgressPage({ habits, routines, userPoints }: ProgressPageProps) {
-  // Define journey start date as 5 days ago to match mock data or default to today
+export default function ProgressPage({ habits, routines, userPoints, onResetMission }: ProgressPageProps) {
+  // Define journey start date as saved or default to today
   const savedStartDate = localStorage.getItem('journey_start_date');
   const today = new Date();
   
   if (!savedStartDate) {
-    // If not set, let's backdate it by 5 days so user starts with some progress
-    const backdated = new Date();
-    backdated.setDate(today.getDate() - 5);
-    const dateStr = backdated.toISOString().split('T')[0];
-    localStorage.setItem('journey_start_date', dateStr);
+    localStorage.setItem('journey_start_date', dateToday);
   }
   
   const journeyStartDateStr = localStorage.getItem('journey_start_date') || dateToday;
@@ -40,10 +37,9 @@ export default function ProgressPage({ habits, routines, userPoints }: ProgressP
     let habitsTotal = 0;
     
     habits.forEach(h => {
-      // Check if habit has history on this date
-      const val = h.history[dateStr] || 0;
-      if (val > 0 || h.repeat === 'Daily') {
+      if (isHabitScheduledForDate(h, dateStr)) {
         habitsTotal++;
+        const val = h.history[dateStr] || 0;
         if (val >= h.target) {
           habitsDone++;
         }
@@ -70,10 +66,14 @@ export default function ProgressPage({ habits, routines, userPoints }: ProgressP
   // Calculate completed days
   const completedDaysCount = gridDays.filter(d => d.completed).length;
   const progressPercent = Math.round((completedDaysCount / 90) * 100);
+
+  // Today's habit progress
+  const todayTotal = habits.length;
+  const todayDone = habits.filter(h => (h.history[dateToday] || 0) >= h.target).length;
+  const todayPct = todayTotal > 0 ? Math.round((todayDone / todayTotal) * 100) : 0;
   
   // Calculate current streak
   let currentStreak = 0;
-  // Start from today and count backwards
   const todayIndex = gridDays.findIndex(d => d.isTodayStr);
   if (todayIndex !== -1) {
     for (let i = todayIndex; i >= 0; i--) {
@@ -81,7 +81,6 @@ export default function ProgressPage({ habits, routines, userPoints }: ProgressP
       if (day.completed) {
         currentStreak++;
       } else if (day.isTodayStr) {
-        // If today is not completed yet, keep checking yesterday
         continue;
       } else {
         break;
@@ -90,134 +89,160 @@ export default function ProgressPage({ habits, routines, userPoints }: ProgressP
   }
   
   return (
-    <div className="space-y-8 max-w-4xl mx-auto font-sans pb-10">
+    <div className="space-y-6 max-w-4xl mx-auto font-sans pb-10 px-4 pt-5">
       {/* Header section */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <span className="text-[10px] font-mono font-bold tracking-widest text-[#12B886] uppercase bg-[#12B886]/10 px-2.5 py-1 rounded-full border border-[#12B886]/20">
+          <span className="text-[10px] font-mono font-bold tracking-widest text-emerald-700 uppercase bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
             Transformation Analytics
           </span>
-          <h1 className="text-3xl font-extrabold text-white mt-3 font-sans tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-black text-gray-900 mt-2 tracking-tight">
             90 Days Consistency Grid
           </h1>
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
             Focus on daily execution. Don't break the chain.
           </p>
         </div>
         
-        <div className="flex items-center gap-3">
-          <div className="bg-[#14161F] border border-[#232734] px-4 py-2.5 rounded-2xl flex items-center gap-3">
-            <Calendar className="w-5 h-5 text-indigo-400" />
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="bg-white border border-gray-200 px-3.5 py-2 rounded-2xl flex items-center gap-2.5 shadow-xs">
+            <Calendar className="w-4 h-4 text-indigo-500" />
             <div>
-              <div className="text-[10px] font-mono text-gray-500 uppercase">Started On</div>
-              <div className="text-xs font-bold text-white mt-0.5">{journeyStartDateStr}</div>
+              <div className="text-[9px] font-mono text-gray-400 uppercase font-semibold">Started On</div>
+              <div className="text-xs font-bold text-gray-800">{journeyStartDateStr}</div>
             </div>
           </div>
+
+          {onResetMission && (
+            <button
+              type="button"
+              onClick={onResetMission}
+              className="bg-white border border-gray-200 hover:border-rose-300 hover:bg-rose-50 text-gray-700 hover:text-rose-600 px-3.5 py-2 rounded-2xl flex items-center gap-2 shadow-xs transition cursor-pointer active:scale-95 text-xs font-bold"
+              title="Reset 90-Day transformation back to Day 1"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset Mission</span>
+            </button>
+          )}
         </div>
       </div>
       
       {/* Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {/* Streak card */}
-        <div className="bg-[#14161F]/90 border border-[#232734]/80 p-5 rounded-2xl flex items-center justify-between relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-20 h-20 bg-orange-500/5 rounded-bl-full blur-xl pointer-events-none" />
-          <div className="space-y-1">
-            <div className="text-[10px] font-mono text-gray-500 uppercase tracking-wider">Current Streak</div>
-            <div className="text-3xl font-extrabold text-white font-sans">{currentStreak} Days</div>
-            <div className="text-xs text-orange-400 font-medium">Keep the flame alive!</div>
+        <div className="bg-white border border-gray-200/80 p-4 rounded-2xl flex flex-col justify-between gap-2 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-mono text-gray-400 uppercase font-bold tracking-wider">Streak</span>
+            <div className="w-8 h-8 rounded-xl bg-orange-50 flex items-center justify-center text-orange-500">
+              <Flame className="w-4 h-4" />
+            </div>
           </div>
-          <div className="bg-orange-500/10 border border-orange-500/20 p-3 rounded-xl text-orange-400">
-            <Flame className="w-6 h-6 animate-pulse" />
+          <div>
+            <div className="text-2xl font-black text-gray-900">{currentStreak} Days</div>
+            <div className="text-[11px] text-orange-600 font-semibold mt-0.5">Keep the flame alive!</div>
           </div>
         </div>
         
-        {/* Days Done card */}
-        <div className="bg-[#14161F]/90 border border-[#232734]/80 p-5 rounded-2xl flex items-center justify-between relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-20 h-20 bg-[#12B886]/5 rounded-bl-full blur-xl pointer-events-none" />
-          <div className="space-y-1">
-            <div className="text-[10px] font-mono text-gray-500 uppercase tracking-wider">Perfect Days</div>
-            <div className="text-3xl font-extrabold text-white font-sans">{completedDaysCount} / 90</div>
-            <div className="text-xs text-[#12B886] font-medium">{progressPercent}% Completed</div>
+        {/* Perfect Days card */}
+        <div className="bg-white border border-gray-200/80 p-4 rounded-2xl flex flex-col justify-between gap-2 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-mono text-gray-400 uppercase font-bold tracking-wider">Perfect Days</span>
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+              <CheckCircle className="w-4 h-4" />
+            </div>
           </div>
-          <div className="bg-[#12B886]/10 border border-[#12B886]/20 p-3 rounded-xl text-[#12B886]">
-            <CheckCircle className="w-6 h-6" />
+          <div>
+            <div className="text-2xl font-black text-gray-900">{completedDaysCount} / 90</div>
+            <div className="text-[11px] text-emerald-600 font-semibold mt-0.5">{progressPercent}% Locked In</div>
+          </div>
+        </div>
+
+        {/* Today Habit Completion */}
+        <div className="bg-white border border-gray-200/80 p-4 rounded-2xl flex flex-col justify-between gap-2 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-mono text-gray-400 uppercase font-bold tracking-wider">Today's Habits</span>
+            <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+              <Target className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <div className="text-2xl font-black text-gray-900">{todayDone} / {todayTotal}</div>
+            <div className="text-[11px] text-blue-600 font-semibold mt-0.5">{todayPct}% Done Today</div>
           </div>
         </div>
         
         {/* Total Points card */}
-        <div className="bg-[#14161F]/90 border border-[#232734]/80 p-5 rounded-2xl flex items-center justify-between relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-500/5 rounded-bl-full blur-xl pointer-events-none" />
-          <div className="space-y-1">
-            <div className="text-[10px] font-mono text-gray-500 uppercase tracking-wider">Mission Points</div>
-            <div className="text-3xl font-extrabold text-white font-sans">{userPoints} PTS</div>
-            <div className="text-xs text-indigo-400 font-medium">Unlock higher limits!</div>
+        <div className="bg-white border border-gray-200/80 p-4 rounded-2xl flex flex-col justify-between gap-2 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-mono text-gray-400 uppercase font-bold tracking-wider">Points</span>
+            <div className="w-8 h-8 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
+              <Zap className="w-4 h-4" />
+            </div>
           </div>
-          <div className="bg-indigo-500/10 border border-indigo-500/20 p-3 rounded-xl text-indigo-400">
-            <Zap className="w-6 h-6" />
+          <div>
+            <div className="text-2xl font-black text-gray-900">{userPoints} PTS</div>
+            <div className="text-[11px] text-purple-600 font-semibold mt-0.5">Consistency score</div>
           </div>
         </div>
       </div>
       
       {/* 90 Days Grid Visual Card */}
-      <div className="bg-[#14161F]/90 border border-[#232734]/80 p-6 rounded-2xl shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-[#12B886]/5 rounded-full blur-3xl pointer-events-none" />
-        
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-base font-bold text-white flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-[#12B886]" />
-            Your Journey Progress
+      <div className="bg-white border border-gray-200 rounded-3xl p-5 sm:p-6 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+          <h3 className="text-sm font-black text-gray-900 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-emerald-600" />
+            Your Journey Map
           </h3>
           <div className="flex flex-wrap items-center gap-3 text-xs">
-            <div className="flex items-center gap-1.5 text-gray-400">
-              <div className="w-3 h-3 bg-[#12B886] rounded" />
-              <span>Perfect</span>
+            <div className="flex items-center gap-1.5 text-gray-600">
+              <div className="w-3 h-3 bg-emerald-500 rounded" />
+              <span>Perfect (100%)</span>
             </div>
-            <div className="flex items-center gap-1.5 text-gray-400">
-              <div className="w-3 h-3 bg-amber-500/25 border border-amber-500/40 rounded" />
+            <div className="flex items-center gap-1.5 text-gray-600">
+              <div className="w-3 h-3 bg-amber-200 border border-amber-400 rounded" />
               <span>Active/Partial</span>
             </div>
-            <div className="flex items-center gap-1.5 text-gray-400">
-              <div className="w-3 h-3 bg-[#1E2230] border border-[#2D334D] rounded" />
-              <span>Future</span>
+            <div className="flex items-center gap-1.5 text-gray-600">
+              <div className="w-3 h-3 bg-emerald-50 border-2 border-emerald-600 rounded" />
+              <span>Today</span>
             </div>
-            <div className="flex items-center gap-1.5 text-gray-400">
-              <div className="w-3 h-3 bg-rose-500/10 border border-rose-500/25 rounded" />
+            <div className="flex items-center gap-1.5 text-gray-600">
+              <div className="w-3 h-3 bg-rose-100 border border-rose-300 rounded" />
               <span>Missed</span>
             </div>
           </div>
         </div>
         
         {/* Grid layout */}
-        <div className="grid grid-cols-5 sm:grid-cols-10 gap-3">
+        <div className="grid grid-cols-5 sm:grid-cols-10 gap-2 sm:gap-2.5">
           {gridDays.map((day) => {
-            let bgClass = 'bg-[#12141C] border border-[#232734] text-gray-500';
+            let bgClass = 'bg-gray-50 border border-gray-200 text-gray-400';
             
             if (day.completed) {
-              bgClass = 'bg-[#12B886] text-white border-transparent shadow-[0_0_12px_rgba(18,184,134,0.35)]';
+              bgClass = 'bg-emerald-500 text-white font-bold shadow-xs';
             } else if (day.partiallyCompleted) {
-              bgClass = 'bg-amber-500/10 border border-amber-500/45 text-amber-300';
+              bgClass = 'bg-amber-100 border border-amber-300 text-amber-900 font-bold';
             } else if (day.missed) {
-              bgClass = 'bg-rose-500/5 border border-rose-500/20 text-rose-400/70';
+              bgClass = 'bg-rose-50 border border-rose-200 text-rose-500';
             } else if (day.isTodayStr) {
-              bgClass = 'bg-[#1E2230] border-2 border-indigo-500 text-indigo-400 animate-pulse font-bold';
+              bgClass = 'bg-emerald-50 border-2 border-emerald-600 text-emerald-900 font-black shadow-sm ring-2 ring-emerald-100';
             }
             
             return (
               <div
                 key={day.dayNum}
-                className={`aspect-square flex flex-col items-center justify-center rounded-xl p-1.5 transition-all duration-300 hover:scale-105 select-none relative group cursor-pointer ${bgClass}`}
-                title={`${day.dateStr} - Day ${day.dayNum}`}
+                className={`aspect-square flex flex-col items-center justify-center rounded-xl p-1 transition-all duration-200 hover:scale-105 select-none relative group cursor-pointer ${bgClass}`}
               >
                 <span className="text-xs font-mono font-bold">{day.dayNum}</span>
-                <span className="text-[7px] font-mono uppercase tracking-tighter opacity-50">
+                <span className="text-[7px] font-mono uppercase tracking-tighter opacity-70">
                   {day.isTodayStr ? 'TODAY' : ''}
                 </span>
                 
                 {/* Floating tooltip */}
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block bg-[#0A0B0E] border border-[#232734] text-white text-[10px] py-1 px-2 rounded whitespace-nowrap z-20 pointer-events-none shadow-xl">
-                  <div>{day.dateStr}</div>
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block bg-gray-900 text-white text-[10px] py-1.5 px-2.5 rounded-xl whitespace-nowrap z-20 pointer-events-none shadow-xl">
+                  <div className="font-semibold">{day.dateStr} (Day {day.dayNum})</div>
                   {day.habitsTotal > 0 && (
-                    <div className="text-[#12B886] font-mono mt-0.5">
+                    <div className="text-emerald-400 font-mono mt-0.5">
                       {day.habitsDone}/{day.habitsTotal} Habits Completed
                     </div>
                   )}
@@ -228,9 +253,9 @@ export default function ProgressPage({ habits, routines, userPoints }: ProgressP
         </div>
         
         {/* Quote of transformation */}
-        <div className="mt-8 p-4 bg-[#12141C] border border-[#232734]/60 rounded-xl flex items-center gap-3">
-          <Sparkles className="w-5 h-5 text-amber-400 shrink-0" />
-          <p className="text-xs text-gray-400 italic">
+        <div className="mt-6 p-4 bg-amber-50/70 border border-amber-200/70 rounded-2xl flex items-center gap-3">
+          <Sparkles className="w-5 h-5 text-amber-600 shrink-0" />
+          <p className="text-xs text-amber-900 italic">
             "It doesn't matter how slow you go as long as you do not stop. Real transformation happens through daily consistency, one day at a time."
           </p>
         </div>
@@ -238,3 +263,4 @@ export default function ProgressPage({ habits, routines, userPoints }: ProgressP
     </div>
   );
 }
+

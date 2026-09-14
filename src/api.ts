@@ -1,4 +1,4 @@
-import { Habit, Routine, Category } from './types';
+import { Habit, Routine, Category, SubHabit } from './types';
 import { supabase } from './supabase';
 import { mapLegacyCategory, dateToday } from './data';
 
@@ -701,6 +701,7 @@ export const api = {
               enableFocusTimer: data.enable_focus_timer,
               routineId: data.routine_id,
               createdAt: data.created_at,
+              subHabits: habitData.subHabits || [],
               history: {},
             };
             const currentLocal = getLocalHabits(userId);
@@ -729,6 +730,7 @@ export const api = {
       enableFocusTimer: habitData.enableFocusTimer || false,
       routineId: habitData.routineId,
       createdAt: dateToday,
+      subHabits: habitData.subHabits || [],
       history: {},
     };
 
@@ -888,6 +890,72 @@ export const api = {
         supabaseKnownOffline = true;
       }
     }
+  },
+
+  // ─── SUB-HABITS ───────────────────────────────────────────────────────────
+
+  async addSubHabit(habitId: string, title: string): Promise<Habit> {
+    const userId = await getEffectiveUserId();
+    const habits = getLocalHabits(userId);
+    const habit = habits.find((h) => h.id === habitId);
+    if (!habit) throw new ApiError('Habit not found', 404);
+
+    if (!habit.subHabits) habit.subHabits = [];
+    const newSub: SubHabit = {
+      id: 'sub_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      title: title.trim(),
+      completedHistory: {},
+    };
+    habit.subHabits.push(newSub);
+    saveLocalHabits(userId, habits);
+    return habit;
+  },
+
+  async toggleSubHabit(habitId: string, subHabitId: string, dateStr: string): Promise<{ habit: Habit; allSubHabitsDone: boolean }> {
+    const userId = await getEffectiveUserId();
+    const habits = getLocalHabits(userId);
+    const habit = habits.find((h) => h.id === habitId);
+    if (!habit) throw new ApiError('Habit not found', 404);
+
+    if (!habit.subHabits) habit.subHabits = [];
+    const sub = habit.subHabits.find((s) => s.id === subHabitId);
+    if (!sub) throw new ApiError('Sub-habit not found', 404);
+
+    if (!sub.completedHistory) sub.completedHistory = {};
+    const currentlyDone = Boolean(sub.completedHistory[dateStr]);
+    sub.completedHistory[dateStr] = !currentlyDone;
+
+    // Check if all subhabits are now completed
+    const allDone = habit.subHabits.length > 0 && habit.subHabits.every((s) => Boolean(s.completedHistory?.[dateStr]));
+    if (allDone) {
+      habit.history[dateStr] = Math.max(habit.history[dateStr] || 0, habit.target);
+    }
+
+    saveLocalHabits(userId, habits);
+    return { habit, allSubHabitsDone: allDone };
+  },
+
+  async deleteSubHabit(habitId: string, subHabitId: string): Promise<Habit> {
+    const userId = await getEffectiveUserId();
+    const habits = getLocalHabits(userId);
+    const habit = habits.find((h) => h.id === habitId);
+    if (!habit) throw new ApiError('Habit not found', 404);
+
+    if (habit.subHabits) {
+      habit.subHabits = habit.subHabits.filter((s) => s.id !== subHabitId);
+    }
+    saveLocalHabits(userId, habits);
+    return habit;
+  },
+
+  async resetMission(startDateStr?: string): Promise<any> {
+    const newStartDate = startDateStr || dateToday;
+    localStorage.setItem('journey_start_date', newStartDate);
+    return this.syncJourney({
+      journey_start_date: newStartDate,
+      locked_in_days: 0,
+      consecutive_locked_in_streak: 0,
+    });
   },
 
   // ─── ROUTINES ─────────────────────────────────────────────────────────────

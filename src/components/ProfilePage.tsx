@@ -30,7 +30,7 @@ function getDisplayName(email?: string): string {
 }
 
 function computeOnePercentGrowth(habits: Habit[]): { growth: number; streak: number; levelName: string } {
-  const journeyStartDate = localStorage.getItem('habit_mountain_journey_start_date');
+  const journeyStartDate = localStorage.getItem('journey_start_date') || localStorage.getItem('habit_mountain_journey_start_date');
   if (!journeyStartDate) {
     return { growth: 0, streak: 0, levelName: 'Not Started' };
   }

@@ -1,4 +1,4 @@
-﻿export type Category = 'Fitness' | 'Diet' | 'Career' | 'Recovery' | 'Mind';
+export type Category = 'Fitness' | 'Diet' | 'Career' | 'Recovery' | 'Mind';
 
 export interface FoodLogEntry {
   id: string;
@@ -11,6 +11,28 @@ export interface FoodLogEntry {
   date: string; // YYYY-MM-DD
 }
 
+export interface DailyJournalEntry {
+  date: string; // YYYY-MM-DD
+  mood: string;
+  win: string;
+  reflection: string;
+  createdAt: string;
+}
+
+export interface DietTargets {
+  protein: number;
+  carbs: number;
+  fats: number;
+  fiber: number;
+  calories: number;
+}
+
+export interface PillarGoal {
+  pillar: Category;
+  goal: string;
+  targetMetric?: string;
+}
+
 
 export type HabitType = 'Count' | 'Timer';
 
@@ -18,6 +40,14 @@ export interface HabitLogEntry {
   date: string; // YYYY-MM-DD
   value: number; // amount logged
   pointsEarned: number;
+}
+
+export interface SubHabit {
+  id: string;
+  title: string;
+  completedHistory?: {
+    [dateStr: string]: boolean;
+  };
 }
 
 export interface Habit {
@@ -34,6 +64,7 @@ export interface Habit {
   enableFocusTimer: boolean;
   routineId?: string; // links to parent routine if created via routine builder
   createdAt: string;
+  subHabits?: SubHabit[];
   // History tracking
   history: {
     [dateStr: string]: number; // date string -> amount logged on that day

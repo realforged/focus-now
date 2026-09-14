@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Check, Plus, Star, Flame, CalendarDays, ChevronDown, ChevronUp,
-  ChevronLeft, Clock, Play, Pause, RotateCcw,
+  ChevronLeft, Clock, Play, Pause, RotateCcw, ListChecks,
   Dumbbell, Heart, Target, Moon, Brain, Sparkles, MoreVertical,
   Pencil, Trash2, Undo2
 } from 'lucide-react';
@@ -16,6 +16,7 @@ import {
 } from '../data';
 import CategoryDetailView from './CategoryDetailView';
 import { useToast } from './Toast';
+import SubHabitsDrawer from './SubHabitsDrawer';
 
 // ─── 5 PILLARS CONFIG ──────────────────────────────────────────────────────────
 const PILLAR_MAP: Record<Category, { color: string; bg: string; text: string; icon: React.ElementType }> = {
@@ -90,6 +91,9 @@ interface HabitsPageProps {
   setSelectedRoutineId: (id: string | null) => void;
   selectedCategoryId: Category | null;
   setSelectedCategoryId: (cat: Category | null) => void;
+  onAddSubHabit?: (habitId: string, title: string) => Promise<void>;
+  onToggleSubHabit?: (habitId: string, subHabitId: string, dateStr: string) => Promise<void>;
+  onDeleteSubHabit?: (habitId: string, subHabitId: string) => Promise<void>;
 }
 
 export default function HabitsPage({
@@ -104,6 +108,9 @@ export default function HabitsPage({
   setSelectedRoutineId,
   selectedCategoryId,
   setSelectedCategoryId,
+  onAddSubHabit,
+  onToggleSubHabit,
+  onDeleteSubHabit,
 }: HabitsPageProps) {
   const toast = useToast();
 
@@ -112,6 +119,12 @@ export default function HabitsPage({
 
   // View mode: 'time' vs 'pillar'
   const [viewMode, setViewMode] = useState<'time' | 'pillar'>('time');
+
+  // Expanded habits for action steps drawer
+  const [expandedHabitIds, setExpandedHabitIds] = useState<string[]>([]);
+  const toggleExpandHabit = (id: string) => {
+    setExpandedHabitIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
 
   // Collapsed time blocks
   const [collapsedBlocks, setCollapsedBlocks] = useState<Record<string, boolean>>({});
@@ -125,6 +138,9 @@ export default function HabitsPage({
       return [];
     }
   });
+
+  // Action menu state for Edit / Delete
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const toggleStarHabit = (id: string) => {
     const next = starredHabits.includes(id)
@@ -172,8 +188,8 @@ export default function HabitsPage({
 
   // Journey Day calculations (Day X of 90)
   const journeyStart = localStorage.getItem('journey_start_date') || dateToday;
-  const journeyDiff = Math.abs(new Date(selectedDate).getTime() - new Date(journeyStart).getTime());
-  const currentDayNum = Math.min(90, Math.max(1, Math.ceil(journeyDiff / (1000 * 60 * 60 * 24)) + 1));
+  const journeyDiff = Math.max(0, new Date(selectedDate).getTime() - new Date(journeyStart).getTime());
+  const currentDayNum = Math.min(90, Math.max(1, Math.floor(journeyDiff / (1000 * 60 * 60 * 24)) + 1));
 
   // Streak calculation
   const currentStreak = useMemo(() => {
@@ -466,85 +482,163 @@ export default function HabitsPage({
                           const isStarred = starredHabits.includes(habit.id);
                           const pillar = getPillarConfig(habit.category);
 
+                          const subHabits = habit.subHabits || [];
+                          const isExpanded = expandedHabitIds.includes(habit.id);
+                          const doneSubCount = subHabits.filter(s => Boolean(s.completedHistory?.[selectedDate])).length;
+
                           return (
                             <div
                               key={habit.id}
-                              className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                              className={`p-3.5 rounded-2xl border transition-all ${
                                 isCompleted
                                   ? 'bg-emerald-50/50 border-emerald-200'
                                   : 'bg-gray-50/60 border-gray-100 hover:border-gray-200'
                               }`}
                             >
-                              {/* Left Check Circle Button */}
-                              <button
-                                type="button"
-                                onClick={() => onLogHabit(habit.id, isCompleted ? 0 : habit.target)}
-                                className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition cursor-pointer active:scale-90 ${
-                                  isCompleted
-                                    ? 'bg-[#10B981] text-white shadow-sm'
-                                    : 'border-2 border-gray-300 hover:border-emerald-500 bg-white'
-                                }`}
-                                aria-label={isCompleted ? 'Mark incomplete' : 'Mark completed'}
-                              >
-                                {isCompleted && <Check className="w-4 h-4 stroke-[3px]" />}
-                              </button>
-
-                              {/* Habit Name & Metadata */}
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <h3
-                                    className={`text-sm font-black truncate ${
-                                      isCompleted ? 'line-through text-gray-400' : 'text-gray-900'
-                                    }`}
-                                  >
-                                    {habit.name}
-                                  </h3>
-                                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${pillar.bg} ${pillar.text}`}>
-                                    {habit.category}
-                                  </span>
-                                </div>
-                                <div className="text-[11px] font-mono text-gray-400 mt-0.5">
-                                  {currentVal} / {habit.target} {habit.unit}
-                                </div>
-                              </div>
-
-                              {/* Right Actions */}
-                              <div className="flex items-center gap-2 shrink-0">
-                                {/* Star Habit for Home Focus */}
+                              <div className="flex items-center justify-between gap-3">
+                                {/* Left Check Circle Button */}
                                 <button
                                   type="button"
-                                  onClick={() => toggleStarHabit(habit.id)}
-                                  className={`p-1.5 rounded-lg transition cursor-pointer ${
-                                    isStarred ? 'text-amber-400' : 'text-gray-300 hover:text-amber-300'
+                                  onClick={() => onLogHabit(habit.id, isCompleted ? 0 : habit.target)}
+                                  className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition cursor-pointer active:scale-90 ${
+                                    isCompleted
+                                      ? 'bg-[#10B981] text-white shadow-sm'
+                                      : 'border-2 border-gray-300 hover:border-emerald-500 bg-white'
                                   }`}
-                                  title={isStarred ? 'Unpin from Today Focus' : 'Pin to Today Focus'}
+                                  aria-label={isCompleted ? 'Mark incomplete' : 'Mark completed'}
                                 >
-                                  <Star className={`w-4 h-4 ${isStarred ? 'fill-amber-400' : ''}`} />
+                                  {isCompleted && <Check className="w-4 h-4 stroke-[3px]" />}
                                 </button>
 
-                                {/* Timer action if timer habit */}
-                                {habit.type === 'Timer' && !isCompleted && (
-                                  <button
-                                    type="button"
-                                    onClick={() => startFocusTimer(habit.id, habit.target)}
-                                    className="px-2.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-                                  >
-                                    <Play className="w-3 h-3 fill-purple-600" />
-                                    <span>Start</span>
-                                  </button>
-                                )}
+                                {/* Habit Name & Metadata */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <h3
+                                      className={`text-sm font-black truncate ${
+                                        isCompleted ? 'line-through text-gray-400' : 'text-gray-900'
+                                      }`}
+                                    >
+                                      {habit.name}
+                                    </h3>
+                                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${pillar.bg} ${pillar.text}`}>
+                                      {habit.category}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    <span className="text-[11px] font-mono text-gray-400">
+                                      {currentVal} / {habit.target} {habit.unit}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleExpandHabit(habit.id)}
+                                      className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-lg transition cursor-pointer ${
+                                        subHabits.length > 0
+                                          ? isExpanded
+                                            ? 'bg-emerald-100 text-emerald-700'
+                                            : 'bg-gray-200/70 hover:bg-gray-200 text-gray-700'
+                                          : 'text-gray-400 hover:text-gray-600 hover:bg-gray-200/50'
+                                      }`}
+                                    >
+                                      <ListChecks className="w-3 h-3" />
+                                      <span>{subHabits.length > 0 ? `${doneSubCount}/${subHabits.length} steps` : '+ Step'}</span>
+                                      {isExpanded ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
+                                    </button>
+                                  </div>
+                                </div>
 
-                                {/* Increment Button */}
-                                {!isCompleted && (
+                                {/* Right Actions */}
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {/* Star Habit for Home Focus */}
                                   <button
                                     type="button"
-                                    onClick={() => onLogHabit(habit.id, habit.type === 'Timer' ? 5 : 1)}
-                                    className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-extrabold transition cursor-pointer active:scale-95"
+                                    onClick={() => toggleStarHabit(habit.id)}
+                                    className={`p-1.5 rounded-lg transition cursor-pointer ${
+                                      isStarred ? 'text-amber-400' : 'text-gray-300 hover:text-amber-300'
+                                    }`}
+                                    title={isStarred ? 'Unpin from Today Focus' : 'Pin to Today Focus'}
                                   >
-                                    {habit.type === 'Timer' ? '+5m' : '+1'}
+                                    <Star className={`w-4 h-4 ${isStarred ? 'fill-amber-400' : ''}`} />
                                   </button>
-                                )}
+
+                                  {/* Timer action if timer habit */}
+                                  {habit.type === 'Timer' && !isCompleted && (
+                                    <button
+                                      type="button"
+                                      onClick={() => startFocusTimer(habit.id, habit.target)}
+                                      className="px-2.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <Play className="w-3 h-3 fill-purple-600" />
+                                      <span>Start</span>
+                                    </button>
+                                  )}
+
+                                  {/* Increment Button */}
+                                  {!isCompleted && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onLogHabit(habit.id, habit.type === 'Timer' ? 5 : 1)}
+                                      className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-extrabold transition cursor-pointer active:scale-95"
+                                    >
+                                      {habit.type === 'Timer' ? '+5m' : '+1'}
+                                    </button>
+                                  )}
+
+                                  {/* More Options (Edit / Delete) */}
+                                  <div className="relative">
+                                    <button
+                                      type="button"
+                                      onClick={() => setOpenMenuId(openMenuId === habit.id ? null : habit.id)}
+                                      className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition cursor-pointer"
+                                      title="Options"
+                                    >
+                                      <MoreVertical className="w-4 h-4" />
+                                    </button>
+                                    {openMenuId === habit.id && (
+                                      <>
+                                        <div className="fixed inset-0 z-20" onClick={() => setOpenMenuId(null)} />
+                                        <div className="absolute right-0 top-8 z-30 w-36 bg-white border border-gray-200 rounded-2xl shadow-xl p-1 text-left space-y-0.5 animate-in fade-in zoom-in-95">
+                                          {onEditHabit && (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setOpenMenuId(null);
+                                                onEditHabit(habit);
+                                              }}
+                                              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition cursor-pointer"
+                                            >
+                                              <Pencil className="w-3.5 h-3.5 text-blue-500" />
+                                              <span>Edit Habit</span>
+                                            </button>
+                                          )}
+                                          {onDeleteHabit && (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setOpenMenuId(null);
+                                                onDeleteHabit(habit.id);
+                                              }}
+                                              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition cursor-pointer"
+                                            >
+                                              <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                                              <span>Delete Habit</span>
+                                            </button>
+                                          )}
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
+
+                              {isExpanded && (
+                                <SubHabitsDrawer
+                                  habit={habit}
+                                  dateStr={selectedDate}
+                                  onToggleSubHabit={onToggleSubHabit}
+                                  onAddSubHabit={onAddSubHabit}
+                                  onDeleteSubHabit={onDeleteSubHabit}
+                                />
+                              )}
                             </div>
                           );
                         })}
@@ -608,48 +702,121 @@ export default function HabitsPage({
                     {pillarHabits.map(habit => {
                       const currentVal = habit.history[selectedDate] || 0;
                       const isCompleted = currentVal >= habit.target;
+                      const subHabits = habit.subHabits || [];
+                      const isExpanded = expandedHabitIds.includes(habit.id);
+                      const doneSubCount = subHabits.filter(s => Boolean(s.completedHistory?.[selectedDate])).length;
 
                       return (
                         <div
                           key={habit.id}
-                          className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                          className={`p-3 rounded-2xl border transition-all ${
                             isCompleted
                               ? 'bg-emerald-50/50 border-emerald-200'
                               : 'bg-gray-50/60 border-gray-100'
                           }`}
                         >
-                          <button
-                            type="button"
-                            onClick={() => onLogHabit(habit.id, isCompleted ? 0 : habit.target)}
-                            className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition cursor-pointer active:scale-90 ${
-                              isCompleted
-                                ? 'bg-[#10B981] text-white'
-                                : 'border-2 border-gray-300 hover:border-emerald-500 bg-white'
-                            }`}
-                          >
-                            {isCompleted && <Check className="w-3.5 h-3.5 stroke-[3px]" />}
-                          </button>
+                          <div className="flex items-center justify-between gap-3">
+                            <button
+                              type="button"
+                              onClick={() => onLogHabit(habit.id, isCompleted ? 0 : habit.target)}
+                              className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition cursor-pointer active:scale-90 ${
+                                isCompleted
+                                  ? 'bg-[#10B981] text-white'
+                                  : 'border-2 border-gray-300 hover:border-emerald-500 bg-white'
+                              }`}
+                            >
+                              {isCompleted && <Check className="w-3.5 h-3.5 stroke-[3px]" />}
+                            </button>
 
-                          <div className="flex-1 min-w-0">
-                            <h3 className={`text-sm font-black truncate ${isCompleted ? 'line-through text-gray-400' : 'text-gray-900'}`}>
-                              {habit.name}
-                            </h3>
-                            <p className="text-[10px] font-mono text-gray-400">
-                              {currentVal}/{habit.target} {habit.unit}
-                            </p>
+                            <div className="flex-1 min-w-0">
+                              <h3 className={`text-sm font-black truncate ${isCompleted ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+                                {habit.name}
+                              </h3>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[10px] font-mono text-gray-400">
+                                  {currentVal}/{habit.target} {habit.unit}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpandHabit(habit.id)}
+                                  className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-lg transition cursor-pointer ${
+                                    subHabits.length > 0
+                                      ? isExpanded
+                                        ? 'bg-emerald-100 text-emerald-700'
+                                        : 'bg-gray-200/70 hover:bg-gray-200 text-gray-700'
+                                      : 'text-gray-400 hover:text-gray-600 hover:bg-gray-200/50'
+                                  }`}
+                                >
+                                  <ListChecks className="w-3 h-3" />
+                                  <span>{subHabits.length > 0 ? `${doneSubCount}/${subHabits.length} steps` : '+ Step'}</span>
+                                  {isExpanded ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              {!isCompleted && (
+                                <button
+                                  type="button"
+                                  onClick={() => onLogHabit(habit.id, habit.type === 'Timer' ? 5 : 1)}
+                                  className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-black transition cursor-pointer active:scale-95"
+                                >
+                                  {habit.type === 'Timer' ? '+5m' : '+1'}
+                                </button>
+                              )}
+
+                              {/* More Options (Edit / Delete) */}
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenMenuId(openMenuId === habit.id ? null : habit.id)}
+                                  className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition cursor-pointer"
+                                  title="Options"
+                                >
+                                  <MoreVertical className="w-4 h-4" />
+                                </button>
+                                {openMenuId === habit.id && (
+                                  <>
+                                    <div className="fixed inset-0 z-20" onClick={() => setOpenMenuId(null)} />
+                                    <div className="absolute right-0 top-8 z-30 w-36 bg-white border border-gray-200 rounded-2xl shadow-xl p-1 text-left space-y-0.5 animate-in fade-in zoom-in-95">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setOpenMenuId(null);
+                                          onEditHabit(habit);
+                                        }}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition cursor-pointer"
+                                      >
+                                        <Pencil className="w-3.5 h-3.5 text-blue-500" />
+                                        <span>Edit Habit</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setOpenMenuId(null);
+                                          onDeleteHabit(habit.id);
+                                        }}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition cursor-pointer"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                                        <span>Delete Habit</span>
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </div>
                           </div>
 
-                          <div className="flex items-center gap-2 shrink-0">
-                            {!isCompleted && (
-                              <button
-                                type="button"
-                                onClick={() => onLogHabit(habit.id, habit.type === 'Timer' ? 5 : 1)}
-                                className="px-3 py-1.5 bg-gray-900 text-white rounded-xl text-xs font-black transition cursor-pointer active:scale-95"
-                              >
-                                {habit.type === 'Timer' ? '+5m' : '+1'}
-                              </button>
-                            )}
-                          </div>
+                          {isExpanded && (
+                            <SubHabitsDrawer
+                              habit={habit}
+                              dateStr={selectedDate}
+                              onToggleSubHabit={onToggleSubHabit}
+                              onAddSubHabit={onAddSubHabit}
+                              onDeleteSubHabit={onDeleteSubHabit}
+                            />
+                          )}
                         </div>
                       );
                     })}

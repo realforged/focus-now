@@ -29,14 +29,15 @@ export const getDateDayIndex = (dateStr: string): number => {
 };
 
 export const isHabitScheduledForDate = (habit: Habit, dateStr: string): boolean => {
-  if (habit.createdAt && new Date(habit.createdAt) > new Date(dateStr)) return false;
-  if (habit.repeat === 'Today Only') return habit.createdAt === dateStr;
+  const createdDay = habit.createdAt ? habit.createdAt.split('T')[0] : '';
+  if (createdDay && createdDay > dateStr) return false;
+  if (habit.repeat === 'Today Only') return createdDay === dateStr;
   if (habit.repeat === 'Custom Days') {
     return habit.repeatDays && habit.repeatDays.length > 0
       ? habit.repeatDays.includes(getDateDayIndex(dateStr))
       : true;
   }
-  return true;
+  return true; // 'Daily' habits repeat every day
 };
 
 export const isRoutineScheduledForDate = (routine: Routine, dateStr: string): boolean => {
