@@ -1,6 +1,6 @@
-import { Habit, Routine } from './types';
+import { Habit, Routine, Category } from './types';
 import { supabase } from './supabase';
-import { mapLegacyCategory } from './data';
+import { mapLegacyCategory, dateToday } from './data';
 
 export class ApiError extends Error {
   status: number;
@@ -16,10 +16,236 @@ function isRateLimitError(error: any): boolean {
   return error?.status === 429 || message.includes('rate limit') || message.includes('too many requests');
 }
 
+function isNetworkError(error: any): boolean {
+  if (!error) return false;
+  const msg = String(error?.message || error).toLowerCase();
+  return (
+    msg.includes('fetch failed') ||
+    msg.includes('failed to fetch') ||
+    msg.includes('network') ||
+    msg.includes('enotfound') ||
+    msg.includes('load failed') ||
+    msg.includes('connection refused') ||
+    msg.includes('abort') ||
+    error.name === 'TypeError' ||
+    error.status === 0 ||
+    error.status === 502 ||
+    error.status === 503 ||
+    error.status === 504
+  );
+}
+
 function hasDemoCredentials(): boolean {
   return Boolean(import.meta.env.VITE_DEMO_EMAIL && import.meta.env.VITE_DEMO_PASSWORD);
 }
 
+// ─── LOCAL STORAGE REPOSITORY (OFFLINE-FIRST / FALLBACK ENGINE) ────────────────
+
+interface LocalUser {
+  id: string;
+  email: string;
+  passwordHash: string;
+  createdAt: string;
+}
+
+interface LocalSession {
+  id: string;
+  email: string;
+  token: string;
+}
+
+const LOCAL_USERS_KEY = 'focus_auth_users';
+const LOCAL_SESSION_KEY = 'focus_session_user';
+const LOCAL_PROFILE_PREFIX = 'focus_profile_';
+const LOCAL_HABITS_PREFIX = 'focus_habits_';
+const LOCAL_ROUTINES_PREFIX = 'focus_routines_';
+
+async function hashPassword(password: string): Promise<string> {
+  if (typeof crypto !== 'undefined' && crypto.subtle) {
+    try {
+      const msgBuffer = new TextEncoder().encode(password + '_focus_salt_90days');
+      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+    } catch {
+      // Fallback below
+    }
+  }
+  return btoa(password + '_focus_salt_90days');
+}
+
+function getLocalUsers(): Record<string, LocalUser> {
+  try {
+    const raw = localStorage.getItem(LOCAL_USERS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveLocalUsers(users: Record<string, LocalUser>): void {
+  localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(users));
+}
+
+function getLocalSession(): LocalSession | null {
+  try {
+    const raw = localStorage.getItem(LOCAL_SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setLocalSession(session: LocalSession): void {
+  localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(session));
+  localStorage.setItem('habit_mountain_token', session.token);
+}
+
+function clearLocalSession(): void {
+  localStorage.removeItem(LOCAL_SESSION_KEY);
+  localStorage.removeItem('habit_mountain_token');
+}
+
+function getLocalProfile(userId: string, email?: string) {
+  try {
+    const raw = localStorage.getItem(LOCAL_PROFILE_PREFIX + userId);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // ignore
+  }
+  const defaultProfile = {
+    id: userId,
+    email: email || 'Guest User',
+    total_points: 0,
+    locked_in_days: 0,
+    consecutive_locked_in_streak: 0,
+    journey_start_date: dateToday,
+  };
+  saveLocalProfile(defaultProfile);
+  return defaultProfile;
+}
+
+function saveLocalProfile(profile: any) {
+  if (!profile?.id) return;
+  localStorage.setItem(LOCAL_PROFILE_PREFIX + profile.id, JSON.stringify(profile));
+}
+
+function createDefaultHabits(userId: string): Habit[] {
+  const ts = Date.now();
+  return [
+    {
+      id: `habit_${ts}_1`,
+      name: 'Power Workout',
+      category: 'Fitness',
+      points: 30,
+      type: 'Count',
+      target: 1,
+      unit: 'workout',
+      repeat: 'Daily',
+      enableFocusTimer: false,
+      createdAt: dateToday,
+      history: {},
+    },
+    {
+      id: `habit_${ts}_2`,
+      name: 'Deep Work Session',
+      category: 'Career',
+      points: 15,
+      type: 'Timer',
+      target: 30,
+      unit: 'min',
+      repeat: 'Daily',
+      enableFocusTimer: true,
+      createdAt: dateToday,
+      history: {},
+    },
+    {
+      id: `habit_${ts}_3`,
+      name: 'Mindfulness & Clarity',
+      category: 'Mind',
+      points: 10,
+      type: 'Timer',
+      target: 10,
+      unit: 'min',
+      repeat: 'Daily',
+      enableFocusTimer: true,
+      createdAt: dateToday,
+      history: {},
+    },
+    {
+      id: `habit_${ts}_4`,
+      name: 'Track Clean Diet',
+      category: 'Diet',
+      points: 15,
+      type: 'Count',
+      target: 1,
+      unit: 'day',
+      repeat: 'Daily',
+      enableFocusTimer: false,
+      createdAt: dateToday,
+      history: {},
+    },
+    {
+      id: `habit_${ts}_5`,
+      name: '8 Hours Quality Sleep',
+      category: 'Recovery',
+      points: 20,
+      type: 'Count',
+      target: 8,
+      unit: 'hours',
+      repeat: 'Daily',
+      enableFocusTimer: false,
+      createdAt: dateToday,
+      history: {},
+    },
+  ];
+}
+
+function getLocalHabits(userId: string): Habit[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_HABITS_PREFIX + userId);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((h: any) => ({
+          ...h,
+          category: mapLegacyCategory(h.category),
+        }));
+      }
+    }
+  } catch {
+    // ignore
+  }
+  const defaults = createDefaultHabits(userId);
+  saveLocalHabits(userId, defaults);
+  return defaults;
+}
+
+function saveLocalHabits(userId: string, habits: Habit[]): void {
+  localStorage.setItem(LOCAL_HABITS_PREFIX + userId, JSON.stringify(habits));
+}
+
+function getLocalRoutines(userId: string): Routine[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_ROUTINES_PREFIX + userId);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {
+    // ignore
+  }
+  return [];
+}
+
+function saveLocalRoutines(userId: string, routines: Routine[]): void {
+  localStorage.setItem(LOCAL_ROUTINES_PREFIX + userId, JSON.stringify(routines));
+}
+
+// Track whether remote Supabase has proven unreachable to avoid repeated lag
+let supabaseKnownOffline = false;
+
+// Routine helpers for remote Supabase
 async function appendHabitToRoutine(routineId: string, habitId: string): Promise<void> {
   const { data: routine, error: fetchError } = await supabase
     .from('routines')
@@ -58,94 +284,236 @@ async function removeHabitFromRoutine(routineId: string, habitId: string): Promi
   if (updateError) throw new ApiError(updateError.message, 500);
 }
 
+// Helper to determine effective user id (remote or local)
+async function getEffectiveUserId(): Promise<string> {
+  if (!supabaseKnownOffline) {
+    try {
+      const { data: userAuth } = await supabase.auth.getUser();
+      if (userAuth?.user?.id) return userAuth.user.id;
+    } catch {
+      supabaseKnownOffline = true;
+    }
+  }
+  const session = getLocalSession();
+  if (session?.id) return session.id;
+  // Fallback to guest
+  return 'guest_user';
+}
+
 export const api = {
-  // Authentication & Profile
+  // ─── AUTHENTICATION & PROFILE ─────────────────────────────────────────────
+
   async login(emailStr: string, passwordStr: string) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email: emailStr, password: passwordStr });
-    if (error) throw new ApiError(error.message, error.status || 400);
-    if (!data.session) throw new ApiError('Login failed. Please check your credentials and try again.', 401);
-    const profile = await this.getProfile();
-    return { token: data.session.access_token, user: profile };
+    const email = emailStr.trim().toLowerCase();
+
+    // 1. Try Supabase if not flagged offline
+    if (!supabaseKnownOffline) {
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password: passwordStr });
+        if (error) {
+          if (isNetworkError(error)) {
+            supabaseKnownOffline = true;
+          } else {
+            throw new ApiError(error.message, error.status || 400);
+          }
+        } else if (data?.session) {
+          const profile = await this.getProfile();
+          setLocalSession({ id: data.session.user.id, email, token: data.session.access_token });
+          return { token: data.session.access_token, user: profile };
+        }
+      } catch (err: any) {
+        if (isNetworkError(err)) {
+          supabaseKnownOffline = true;
+        } else if (err instanceof ApiError) {
+          throw err;
+        }
+      }
+    }
+
+    // 2. Local Mode Authentication
+    const users = getLocalUsers();
+    const existing = users[email];
+    if (!existing) {
+      throw new ApiError('No account found for this email. Click "Create Account" below to register.', 404);
+    }
+
+    const hash = await hashPassword(passwordStr);
+    if (existing.passwordHash !== hash) {
+      throw new ApiError('Incorrect password. Please try again.', 401);
+    }
+
+    const token = 'local_token_' + existing.id;
+    const session: LocalSession = { id: existing.id, email, token };
+    setLocalSession(session);
+    const profile = getLocalProfile(existing.id, email);
+    return { token, user: profile };
   },
 
   async logout() {
-    await supabase.auth.signOut();
+    clearLocalSession();
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Ignore network errors during signout
+    }
   },
 
   async register(emailStr: string, passwordStr: string) {
-    const { data, error } = await supabase.auth.signUp({
-      email: emailStr,
-      password: passwordStr,
-      options: {
-        emailRedirectTo: window.location.origin,
-      },
-    });
-    if (error) {
-      if (isRateLimitError(error)) {
-        throw new ApiError('Signup is temporarily rate limited by Supabase. Please sign in if you already have an account, or try again after the cooldown.', 429);
+    const email = emailStr.trim().toLowerCase();
+
+    if (!supabaseKnownOffline) {
+      try {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password: passwordStr,
+          options: {
+            emailRedirectTo: window.location.origin,
+          },
+        });
+
+        if (error) {
+          if (isNetworkError(error) || isRateLimitError(error)) {
+            supabaseKnownOffline = true;
+          } else {
+            throw new ApiError(error.message, error.status || 400);
+          }
+        } else if (data?.session) {
+          const profile = await this.getProfile();
+          setLocalSession({ id: data.session.user.id, email, token: data.session.access_token });
+          return { token: data.session.access_token, user: profile };
+        } else if (data?.user && !data.session) {
+          // Email confirmation required in Supabase
+          throw new ApiError('Registration successful. Please check your email to verify your account, then sign in.', 202);
+        }
+      } catch (err: any) {
+        if (isNetworkError(err) || (err instanceof ApiError && err.status === 429)) {
+          supabaseKnownOffline = true;
+        } else if (err instanceof ApiError) {
+          throw err;
+        }
       }
-      throw new ApiError(error.message, error.status || 400);
     }
-    if (!data.session) throw new ApiError('Registration successful. Please check your email to verify your account, then sign in.', 202);
-    const profile = await this.getProfile();
-    return { token: data.session.access_token, user: profile };
+
+    // Local Mode Registration
+    const users = getLocalUsers();
+    if (users[email]) {
+      throw new ApiError('An account with this email already exists. Please sign in.', 400);
+    }
+
+    const userId = 'user_' + Date.now();
+    const hash = await hashPassword(passwordStr);
+    const newUser: LocalUser = {
+      id: userId,
+      email,
+      passwordHash: hash,
+      createdAt: new Date().toISOString(),
+    };
+    users[email] = newUser;
+    saveLocalUsers(users);
+
+    const token = 'local_token_' + userId;
+    const session: LocalSession = { id: userId, email, token };
+    setLocalSession(session);
+
+    // Initialize baseline profile & habits
+    const profile = getLocalProfile(userId, email);
+    getLocalHabits(userId); // triggers seed if empty
+
+    return { token, user: profile };
   },
 
   async loginDemoAccount() {
-    if (!hasDemoCredentials()) {
-      throw new ApiError('Demo login is not configured yet. Add VITE_DEMO_EMAIL and VITE_DEMO_PASSWORD, or enable Anonymous Sign-Ins in Supabase.', 503);
+    if (hasDemoCredentials()) {
+      return this.login(import.meta.env.VITE_DEMO_EMAIL, import.meta.env.VITE_DEMO_PASSWORD);
     }
-    return this.login(import.meta.env.VITE_DEMO_EMAIL, import.meta.env.VITE_DEMO_PASSWORD);
+    return this.startGuestSession();
   },
 
   async startGuestSession() {
-    const { data: existing } = await supabase.auth.getSession();
-    if (existing.session) {
-      const profile = await this.getProfile();
-      return { token: existing.session.access_token, user: profile };
+    // 1. Try Supabase anonymous login if online
+    if (!supabaseKnownOffline) {
+      try {
+        const { data: existing } = await supabase.auth.getSession();
+        if (existing?.session) {
+          const profile = await this.getProfile();
+          setLocalSession({ id: existing.session.user.id, email: 'guest@focusnow.app', token: existing.session.access_token });
+          return { token: existing.session.access_token, user: profile };
+        }
+
+        const { data, error } = await supabase.auth.signInAnonymously({
+          options: {
+            data: { display_name: 'Guest User' },
+          },
+        });
+
+        if (error) {
+          supabaseKnownOffline = true;
+        } else if (data?.session) {
+          const profile = await this.getProfile();
+          setLocalSession({ id: data.session.user.id, email: 'guest@focusnow.app', token: data.session.access_token });
+          return { token: data.session.access_token, user: profile };
+        }
+      } catch {
+        supabaseKnownOffline = true;
+      }
     }
 
-    const { data, error } = await supabase.auth.signInAnonymously({
-      options: {
-        data: { display_name: 'Guest User' },
-      },
-    });
+    // 2. Instant Local Guest Session
+    const guestId = 'guest_user';
+    const guestEmail = 'guest@focusnow.app';
+    const token = 'local_token_guest';
+    const session: LocalSession = { id: guestId, email: guestEmail, token };
+    setLocalSession(session);
 
-    if (error) {
-      if (hasDemoCredentials()) {
-        return this.loginDemoAccount();
-      }
-      if (isRateLimitError(error)) {
-        throw new ApiError('Guest mode is temporarily rate limited by Supabase. Enable a demo account fallback or wait for the rate limit to reset.', 429);
-      }
-      throw new ApiError(`${error.message}. Enable Anonymous Sign-Ins in Supabase Auth, or configure VITE_DEMO_EMAIL and VITE_DEMO_PASSWORD.`, error.status || 400);
-    }
-    if (!data.session) throw new ApiError('Guest session could not be started.', 400);
-    const profile = await this.getProfile();
-    return { token: data.session.access_token, user: profile };
+    const profile = getLocalProfile(guestId, guestEmail);
+    getLocalHabits(guestId); // seeds habits if empty
+
+    return { token, user: profile };
   },
 
   async getProfile() {
-    const { data: userAuth, error: authError } = await supabase.auth.getUser();
-    if (authError || !userAuth.user) throw new ApiError('Not authenticated', 401);
+    if (!supabaseKnownOffline) {
+      try {
+        const { data: userAuth, error: authError } = await supabase.auth.getUser();
+        if (authError || !userAuth?.user) {
+          if (isNetworkError(authError)) {
+            supabaseKnownOffline = true;
+          } else {
+            throw new ApiError('Not authenticated', 401);
+          }
+        } else {
+          const { data, error } = await supabase.from('profiles').select('*').eq('id', userAuth.user.id).maybeSingle();
+          if (error) {
+            if (isNetworkError(error)) supabaseKnownOffline = true;
+            else throw new ApiError(error.message, 500);
+          } else if (data) {
+            return data;
+          } else {
+            const { data: created, error: createError } = await supabase
+              .from('profiles')
+              .insert({
+                id: userAuth.user.id,
+                email: userAuth.user.email || 'Focus User',
+                total_points: 0,
+                locked_in_days: 0,
+                consecutive_locked_in_streak: 0,
+              })
+              .select()
+              .single();
+            if (createError) throw new ApiError(createError.message, 500);
+            return created;
+          }
+        }
+      } catch (err: any) {
+        if (isNetworkError(err)) supabaseKnownOffline = true;
+        else throw err;
+      }
+    }
 
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', userAuth.user.id).maybeSingle();
-    if (error) throw new ApiError(error.message, 500);
-    if (data) return data;
-
-    const { data: created, error: createError } = await supabase
-      .from('profiles')
-      .insert({
-        id: userAuth.user.id,
-        email: userAuth.user.email || 'Guest User',
-        total_points: 0,
-        locked_in_days: 0,
-        consecutive_locked_in_streak: 0,
-      })
-      .select()
-      .single();
-    if (createError) throw new ApiError(createError.message, 500);
-    return created;
+    // Local fallback
+    const session = getLocalSession();
+    const userId = session?.id || 'guest_user';
+    return getLocalProfile(userId, session?.email);
   },
 
   async syncJourney(stats: {
@@ -154,282 +522,418 @@ export const api = {
     locked_in_days?: number;
     consecutive_locked_in_streak?: number;
   }) {
-    const { data: userAuth } = await supabase.auth.getUser();
-    if (!userAuth.user) throw new ApiError('Not authenticated', 401);
+    const userId = await getEffectiveUserId();
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .update(stats)
-      .eq('id', userAuth.user.id)
-      .select()
-      .single();
-    if (error) throw new ApiError(error.message, 500);
-    return data;
+    // Always update local profile backup
+    const localProfile = getLocalProfile(userId);
+    const updatedLocal = { ...localProfile, ...stats };
+    saveLocalProfile(updatedLocal);
+
+    if (!supabaseKnownOffline) {
+      try {
+        const { data: userAuth } = await supabase.auth.getUser();
+        if (userAuth?.user) {
+          const { data, error } = await supabase
+            .from('profiles')
+            .update(stats)
+            .eq('id', userAuth.user.id)
+            .select()
+            .single();
+          if (error) {
+            if (isNetworkError(error)) supabaseKnownOffline = true;
+            else throw new ApiError(error.message, 500);
+          } else if (data) {
+            return data;
+          }
+        }
+      } catch (err: any) {
+        if (isNetworkError(err)) supabaseKnownOffline = true;
+      }
+    }
+
+    return updatedLocal;
   },
 
   async resetAllData() {
-    const { data: userAuth } = await supabase.auth.getUser();
-    if (!userAuth.user) throw new ApiError('Not authenticated', 401);
-    const uid = userAuth.user.id;
+    const userId = await getEffectiveUserId();
 
-    // Reset profile stats
-    await supabase.from('profiles').update({
+    // Reset local store
+    saveLocalProfile({
+      id: userId,
+      email: getLocalSession()?.email || 'Focus User',
       total_points: 0,
       locked_in_days: 0,
       consecutive_locked_in_streak: 0,
-      journey_start_date: null
-    }).eq('id', uid);
+      journey_start_date: null,
+    });
+    saveLocalHabits(userId, createDefaultHabits(userId));
+    saveLocalRoutines(userId, []);
 
-    // Delete habits and routines (cascades logs)
-    await supabase.from('habits').delete().eq('user_id', uid);
-    await supabase.from('routines').delete().eq('user_id', uid);
+    if (!supabaseKnownOffline) {
+      try {
+        const { data: userAuth } = await supabase.auth.getUser();
+        if (userAuth?.user) {
+          const uid = userAuth.user.id;
+          await supabase.from('profiles').update({
+            total_points: 0,
+            locked_in_days: 0,
+            consecutive_locked_in_streak: 0,
+            journey_start_date: null,
+          }).eq('id', uid);
 
-    // Add baseline habits
-    const baselineHabits = [
-      { name: "Power Workout", category: "Fitness", points: 30, type: "Count", target: 1, unit: "workout", repeat: "Daily", enable_focus_timer: false, user_id: uid },
-      { name: "Technical Reading", category: "Reading", points: 15, type: "Timer", target: 30, unit: "min", repeat: "Daily", enable_focus_timer: true, user_id: uid },
-      { name: "Mindfulness Breathing", category: "Mindset", points: 10, type: "Timer", target: 10, unit: "min", repeat: "Daily", enable_focus_timer: true, user_id: uid }
-    ];
-    await supabase.from('habits').insert(baselineHabits);
+          await supabase.from('habits').delete().eq('user_id', uid);
+          await supabase.from('routines').delete().eq('user_id', uid);
+
+          const baselineHabits = createDefaultHabits(uid).map((h) => ({
+            name: h.name,
+            category: h.category,
+            points: h.points,
+            type: h.type,
+            target: h.target,
+            unit: h.unit,
+            repeat: h.repeat,
+            enable_focus_timer: h.enableFocusTimer,
+            user_id: uid,
+          }));
+          await supabase.from('habits').insert(baselineHabits);
+        }
+      } catch {
+        supabaseKnownOffline = true;
+      }
+    }
   },
 
-  // Habits
+  // ─── HABITS ───────────────────────────────────────────────────────────────
+
   async getHabits(): Promise<Habit[]> {
-    const { data: userAuth } = await supabase.auth.getUser();
-    if (!userAuth.user) throw new ApiError('Not authenticated', 401);
+    const userId = await getEffectiveUserId();
 
-    const { data: habits, error: hErr } = await supabase.from('habits').select('*').eq('user_id', userAuth.user.id);
-    if (hErr) throw new ApiError(hErr.message, 500);
+    if (!supabaseKnownOffline) {
+      try {
+        const { data: userAuth } = await supabase.auth.getUser();
+        if (userAuth?.user) {
+          const { data: habits, error: hErr } = await supabase.from('habits').select('*').eq('user_id', userAuth.user.id);
+          if (hErr) {
+            if (isNetworkError(hErr)) supabaseKnownOffline = true;
+            else throw new ApiError(hErr.message, 500);
+          } else if (habits) {
+            const { data: logs, error: lErr } = await supabase.from('habit_logs').select('*').eq('user_id', userAuth.user.id);
+            if (lErr && !isNetworkError(lErr)) throw new ApiError(lErr.message, 500);
 
-    const { data: logs, error: lErr } = await supabase.from('habit_logs').select('*').eq('user_id', userAuth.user.id);
-    if (lErr) throw new ApiError(lErr.message, 500);
+            const logsList = logs || [];
+            const result: Habit[] = habits.map((h: any) => {
+              const hLogs = logsList.filter((l: any) => l.habit_id === h.id);
+              const historyMap: { [date: string]: number } = {};
+              hLogs.forEach((l: any) => {
+                historyMap[l.date] = Number(l.value);
+              });
+              return {
+                id: h.id,
+                name: h.name,
+                category: mapLegacyCategory(h.category),
+                points: h.points,
+                type: h.type,
+                target: h.target,
+                unit: h.unit,
+                repeat: h.repeat,
+                repeatDays: h.repeat_days,
+                timeOfDay: h.time_of_day,
+                enableFocusTimer: h.enable_focus_timer,
+                routineId: h.routine_id,
+                createdAt: h.created_at,
+                history: historyMap,
+              };
+            });
+            saveLocalHabits(userId, result);
+            return result;
+          }
+        }
+      } catch (err: any) {
+        if (isNetworkError(err)) supabaseKnownOffline = true;
+        else throw err;
+      }
+    }
 
-    return habits.map((h: any) => {
-      const hLogs = logs.filter((l: any) => l.habit_id === h.id);
-      const historyMap: { [date: string]: number } = {};
-      hLogs.forEach((l: any) => {
-        historyMap[l.date] = Number(l.value);
-      });
-      return {
-        id: h.id,
-        name: h.name,
-        category: mapLegacyCategory(h.category),
-        points: h.points,
-        type: h.type,
-        target: h.target,
-        unit: h.unit,
-        repeat: h.repeat,
-        repeatDays: h.repeat_days,
-        timeOfDay: h.time_of_day,
-        enableFocusTimer: h.enable_focus_timer,
-        routineId: h.routine_id,
-        createdAt: h.created_at,
-        history: historyMap,
-      };
-    });
+    return getLocalHabits(userId);
   },
 
   async createHabit(habitData: Partial<Habit>): Promise<Habit> {
-    const { data: userAuth } = await supabase.auth.getUser();
-    if (!userAuth.user) throw new ApiError('Not authenticated', 401);
+    const userId = await getEffectiveUserId();
 
-    const payload = {
-      user_id: userAuth.user.id,
-      name: habitData.name,
-      category: habitData.category,
+    if (!supabaseKnownOffline) {
+      try {
+        const { data: userAuth } = await supabase.auth.getUser();
+        if (userAuth?.user) {
+          const payload = {
+            user_id: userAuth.user.id,
+            name: habitData.name,
+            category: habitData.category,
+            points: habitData.points || 10,
+            type: habitData.type || 'Count',
+            target: habitData.target || 1,
+            unit: habitData.unit || 'reps',
+            repeat: habitData.repeat || 'Daily',
+            repeat_days: habitData.repeatDays || null,
+            time_of_day: habitData.timeOfDay || null,
+            enable_focus_timer: habitData.enableFocusTimer || false,
+            routine_id: habitData.routineId || null,
+          };
+
+          const { data, error } = await supabase.from('habits').insert([payload]).select().single();
+          if (error) {
+            if (isNetworkError(error)) supabaseKnownOffline = true;
+            else throw new ApiError(error.message, 500);
+          } else if (data) {
+            if (habitData.routineId) {
+              await appendHabitToRoutine(habitData.routineId, data.id);
+            }
+            const newHabit: Habit = {
+              id: data.id,
+              name: data.name,
+              category: mapLegacyCategory(data.category),
+              points: data.points,
+              type: data.type,
+              target: data.target,
+              unit: data.unit,
+              repeat: data.repeat,
+              repeatDays: data.repeat_days,
+              timeOfDay: data.time_of_day,
+              enableFocusTimer: data.enable_focus_timer,
+              routineId: data.routine_id,
+              createdAt: data.created_at,
+              history: {},
+            };
+            const currentLocal = getLocalHabits(userId);
+            saveLocalHabits(userId, [...currentLocal, newHabit]);
+            return newHabit;
+          }
+        }
+      } catch (err: any) {
+        if (isNetworkError(err)) supabaseKnownOffline = true;
+        else throw err;
+      }
+    }
+
+    // Local create
+    const newHabit: Habit = {
+      id: `habit_${Date.now()}`,
+      name: habitData.name || 'New Habit',
+      category: habitData.category || 'Fitness',
       points: habitData.points || 10,
       type: habitData.type || 'Count',
       target: habitData.target || 1,
       unit: habitData.unit || 'reps',
       repeat: habitData.repeat || 'Daily',
-      repeat_days: habitData.repeatDays || null,
-      time_of_day: habitData.timeOfDay || null,
-      enable_focus_timer: habitData.enableFocusTimer || false,
-      routine_id: habitData.routineId || null
+      repeatDays: habitData.repeatDays,
+      timeOfDay: habitData.timeOfDay,
+      enableFocusTimer: habitData.enableFocusTimer || false,
+      routineId: habitData.routineId,
+      createdAt: dateToday,
+      history: {},
     };
 
-    const { data, error } = await supabase.from('habits').insert([payload]).select().single();
-    if (error) throw new ApiError(error.message, 500);
+    const habits = getLocalHabits(userId);
+    habits.push(newHabit);
+    saveLocalHabits(userId, habits);
 
     if (habitData.routineId) {
-      await appendHabitToRoutine(habitData.routineId, data.id);
+      const routines = getLocalRoutines(userId);
+      const rt = routines.find((r) => r.id === habitData.routineId);
+      if (rt && !rt.habitIds.includes(newHabit.id)) {
+        rt.habitIds.push(newHabit.id);
+        saveLocalRoutines(userId, routines);
+      }
     }
 
-    return {
-        id: data.id,
-        name: data.name,
-        category: data.category,
-        points: data.points,
-        type: data.type,
-        target: data.target,
-        unit: data.unit,
-        repeat: data.repeat,
-        repeatDays: data.repeat_days,
-        timeOfDay: data.time_of_day,
-        enableFocusTimer: data.enable_focus_timer,
-        routineId: data.routine_id,
-        createdAt: data.created_at,
-        history: {},
-    };
+    return newHabit;
   },
 
   async logHabit(habitId: string, date: string, value: number) {
-    const { data: userAuth } = await supabase.auth.getUser();
-    if (!userAuth.user) throw new ApiError('Not authenticated', 401);
+    const userId = await getEffectiveUserId();
 
-    // Fetch current value so we can add to it atomically
-    const { data: current } = await supabase
-      .from('habit_logs')
-      .select('value')
-      .eq('habit_id', habitId)
-      .eq('date', date)
-      .maybeSingle();
+    // Update local store immediately
+    const habits = getLocalHabits(userId);
+    const habit = habits.find((h) => h.id === habitId);
+    let newValue = value;
+    if (habit) {
+      newValue = (habit.history[date] || 0) + value;
+      habit.history[date] = newValue;
+      saveLocalHabits(userId, habits);
+    }
 
-    const newValue = current ? Number(current.value) + value : value;
+    if (!supabaseKnownOffline) {
+      try {
+        const { data: userAuth } = await supabase.auth.getUser();
+        if (userAuth?.user) {
+          const { data: current } = await supabase
+            .from('habit_logs')
+            .select('value')
+            .eq('habit_id', habitId)
+            .eq('date', date)
+            .maybeSingle();
 
-    // Upsert on (habit_id, date) — atomic, race-safe
-    const { error } = await supabase
-      .from('habit_logs')
-      .upsert(
-        { habit_id: habitId, user_id: userAuth.user.id, date, value: newValue },
-        { onConflict: 'habit_id,date' }
-      );
-    if (error) throw new ApiError(error.message, 500);
+          const dbNewValue = current ? Number(current.value) + value : value;
+          const { error } = await supabase
+            .from('habit_logs')
+            .upsert(
+              { habit_id: habitId, user_id: userAuth.user.id, date, value: dbNewValue },
+              { onConflict: 'habit_id,date' }
+            );
+          if (error && !isNetworkError(error)) throw new ApiError(error.message, 500);
+        }
+      } catch (err: any) {
+        if (isNetworkError(err)) supabaseKnownOffline = true;
+      }
+    }
+
     return { habitId, date, value: newValue };
   },
 
   async logHabitAbsolute(habitId: string, date: string, value: number) {
-    const { data: userAuth } = await supabase.auth.getUser();
-    if (!userAuth.user) throw new ApiError('Not authenticated', 401);
+    const userId = await getEffectiveUserId();
 
-    // Upsert absolute value — race-safe
-    const { error } = await supabase
-      .from('habit_logs')
-      .upsert(
-        { habit_id: habitId, user_id: userAuth.user.id, date, value },
-        { onConflict: 'habit_id,date' }
-      );
-    if (error) throw new ApiError(error.message, 500);
+    const habits = getLocalHabits(userId);
+    const habit = habits.find((h) => h.id === habitId);
+    if (habit) {
+      habit.history[date] = value;
+      saveLocalHabits(userId, habits);
+    }
+
+    if (!supabaseKnownOffline) {
+      try {
+        const { data: userAuth } = await supabase.auth.getUser();
+        if (userAuth?.user) {
+          await supabase
+            .from('habit_logs')
+            .upsert(
+              { habit_id: habitId, user_id: userAuth.user.id, date, value },
+              { onConflict: 'habit_id,date' }
+            );
+        }
+      } catch (err: any) {
+        if (isNetworkError(err)) supabaseKnownOffline = true;
+      }
+    }
+
     return { habitId, date, value };
   },
 
   async updateHabit(habitId: string, habitData: Partial<Habit>): Promise<Habit> {
-    const { data: userAuth } = await supabase.auth.getUser();
-    if (!userAuth.user) throw new ApiError('Not authenticated', 401);
+    const userId = await getEffectiveUserId();
 
-    const shouldSyncRoutineLink = habitData.routineId !== undefined;
-    const { data: currentHabit, error: currentErr } = shouldSyncRoutineLink
-      ? await supabase
-          .from('habits')
-          .select('routine_id')
-          .eq('id', habitId)
-          .eq('user_id', userAuth.user.id)
-          .maybeSingle()
-      : { data: null, error: null };
-    if (currentErr) throw new ApiError(currentErr.message, 500);
+    const habits = getLocalHabits(userId);
+    const habit = habits.find((h) => h.id === habitId);
+    if (!habit) throw new ApiError('Habit not found', 404);
 
-    const payload: any = {};
-    if (habitData.name !== undefined) payload.name = habitData.name;
-    if (habitData.category !== undefined) payload.category = habitData.category;
-    if (habitData.points !== undefined) payload.points = habitData.points;
-    if (habitData.type !== undefined) payload.type = habitData.type;
-    if (habitData.target !== undefined) payload.target = habitData.target;
-    if (habitData.unit !== undefined) payload.unit = habitData.unit;
-    if (habitData.repeat !== undefined) payload.repeat = habitData.repeat;
-    if (habitData.repeatDays !== undefined) payload.repeat_days = habitData.repeatDays;
-    if (habitData.timeOfDay !== undefined) payload.time_of_day = habitData.timeOfDay;
-    if (habitData.enableFocusTimer !== undefined) payload.enable_focus_timer = habitData.enableFocusTimer;
-    if (habitData.routineId !== undefined) payload.routine_id = habitData.routineId;
+    const prevRoutineId = habit.routineId;
+    Object.assign(habit, habitData);
+    saveLocalHabits(userId, habits);
 
-    const { data, error } = await supabase.from('habits').update(payload).eq('id', habitId).select().single();
-    if (error) throw new ApiError(error.message, 500);
-
-    if (shouldSyncRoutineLink) {
-      const previousRoutineId = currentHabit?.routine_id || null;
-      const nextRoutineId = habitData.routineId || null;
-
-      if (previousRoutineId && previousRoutineId !== nextRoutineId) {
-        await removeHabitFromRoutine(previousRoutineId, habitId);
+    if (habitData.routineId !== undefined && habitData.routineId !== prevRoutineId) {
+      const routines = getLocalRoutines(userId);
+      if (prevRoutineId) {
+        const oldRt = routines.find((r) => r.id === prevRoutineId);
+        if (oldRt) oldRt.habitIds = oldRt.habitIds.filter((id) => id !== habitId);
       }
-      if (nextRoutineId && previousRoutineId !== nextRoutineId) {
-        await appendHabitToRoutine(nextRoutineId, habitId);
+      if (habitData.routineId) {
+        const newRt = routines.find((r) => r.id === habitData.routineId);
+        if (newRt && !newRt.habitIds.includes(habitId)) newRt.habitIds.push(habitId);
+      }
+      saveLocalRoutines(userId, routines);
+    }
+
+    if (!supabaseKnownOffline) {
+      try {
+        const { data: userAuth } = await supabase.auth.getUser();
+        if (userAuth?.user) {
+          const payload: any = {};
+          if (habitData.name !== undefined) payload.name = habitData.name;
+          if (habitData.category !== undefined) payload.category = habitData.category;
+          if (habitData.points !== undefined) payload.points = habitData.points;
+          if (habitData.type !== undefined) payload.type = habitData.type;
+          if (habitData.target !== undefined) payload.target = habitData.target;
+          if (habitData.unit !== undefined) payload.unit = habitData.unit;
+          if (habitData.repeat !== undefined) payload.repeat = habitData.repeat;
+          if (habitData.repeatDays !== undefined) payload.repeat_days = habitData.repeatDays;
+          if (habitData.timeOfDay !== undefined) payload.time_of_day = habitData.timeOfDay;
+          if (habitData.enableFocusTimer !== undefined) payload.enable_focus_timer = habitData.enableFocusTimer;
+          if (habitData.routineId !== undefined) payload.routine_id = habitData.routineId;
+
+          await supabase.from('habits').update(payload).eq('id', habitId);
+        }
+      } catch (err: any) {
+        if (isNetworkError(err)) supabaseKnownOffline = true;
       }
     }
 
-    return {
-        id: data.id,
-        name: data.name,
-        category: data.category,
-        points: data.points,
-        type: data.type,
-        target: data.target,
-        unit: data.unit,
-        repeat: data.repeat,
-        repeatDays: data.repeat_days,
-        timeOfDay: data.time_of_day,
-        enableFocusTimer: data.enable_focus_timer,
-        routineId: data.routine_id,
-        createdAt: data.created_at,
-        history: {}, // We don't fetch full history on update return
-    };
+    return habit;
   },
 
   async deleteHabit(habitId: string) {
-    const { error } = await supabase.from('habits').delete().eq('id', habitId);
-    if (error) throw new ApiError(error.message, 500);
+    const userId = await getEffectiveUserId();
 
-    // If routines use this habitId in their array, remove it.
-    // JSONB array removal is complex, simplest is fetching routines containing it and updating.
-    const { data: routines } = await supabase.from('routines').select('id, habit_ids').contains('habit_ids', `["${habitId}"]`);
-    if (routines) {
-        for (const rt of routines) {
-            const nextIds = rt.habit_ids.filter((id: string) => id !== habitId);
-            await supabase.from('routines').update({ habit_ids: nextIds }).eq('id', rt.id);
-        }
+    const habits = getLocalHabits(userId).filter((h) => h.id !== habitId);
+    saveLocalHabits(userId, habits);
+
+    const routines = getLocalRoutines(userId);
+    routines.forEach((r) => {
+      r.habitIds = r.habitIds.filter((id) => id !== habitId);
+    });
+    saveLocalRoutines(userId, routines);
+
+    if (!supabaseKnownOffline) {
+      try {
+        await supabase.from('habits').delete().eq('id', habitId);
+      } catch {
+        supabaseKnownOffline = true;
+      }
     }
   },
 
-  // Routines
+  // ─── ROUTINES ─────────────────────────────────────────────────────────────
+
   async getRoutines(): Promise<Routine[]> {
-    const { data: userAuth } = await supabase.auth.getUser();
-    if (!userAuth.user) throw new ApiError('Not authenticated', 401);
+    const userId = await getEffectiveUserId();
 
-    const { data: routines, error: rErr } = await supabase.from('routines').select('*').eq('user_id', userAuth.user.id);
-    if (rErr) throw new ApiError(rErr.message, 500);
+    if (!supabaseKnownOffline) {
+      try {
+        const { data: userAuth } = await supabase.auth.getUser();
+        if (userAuth?.user) {
+          const { data: routines, error: rErr } = await supabase.from('routines').select('*').eq('user_id', userAuth.user.id);
+          if (rErr) {
+            if (isNetworkError(rErr)) supabaseKnownOffline = true;
+            else throw new ApiError(rErr.message, 500);
+          } else if (routines) {
+            const { data: logs } = await supabase.from('routine_logs').select('*').eq('user_id', userAuth.user.id);
+            const logsList = logs || [];
 
-    const { data: logs, error: lErr } = await supabase.from('routine_logs').select('*').eq('user_id', userAuth.user.id);
-    if (lErr) throw new ApiError(lErr.message, 500);
+            const result: Routine[] = routines.map((rt: any) => {
+              const rLogs = logsList.filter((l: any) => l.routine_id === rt.id);
+              const completedMap: { [date: string]: boolean } = {};
+              rLogs.forEach((l: any) => {
+                completedMap[l.date] = l.completed;
+              });
+              return {
+                id: rt.id,
+                name: rt.name,
+                points: rt.points,
+                timeBlock: rt.time_block,
+                repeat: rt.repeat,
+                repeatDays: rt.repeat_days,
+                habitIds: Array.isArray(rt.habit_ids) ? rt.habit_ids : [],
+                completedHistory: completedMap,
+              };
+            });
+            saveLocalRoutines(userId, result);
+            return result;
+          }
+        }
+      } catch (err: any) {
+        if (isNetworkError(err)) supabaseKnownOffline = true;
+      }
+    }
 
-    const { data: routineLinkedHabits, error: hErr } = await supabase
-      .from('habits')
-      .select('id, routine_id')
-      .eq('user_id', userAuth.user.id)
-      .not('routine_id', 'is', null);
-    if (hErr) throw new ApiError(hErr.message, 500);
-
-    return routines.map((rt: any) => {
-      const rLogs = logs.filter((l: any) => l.routine_id === rt.id);
-      const completedMap: { [date: string]: boolean } = {};
-      rLogs.forEach((l: any) => {
-        completedMap[l.date] = l.completed;
-      });
-
-      return {
-        id: rt.id,
-        name: rt.name,
-        points: rt.points,
-        timeBlock: rt.time_block,
-        repeat: rt.repeat,
-        repeatDays: rt.repeat_days,
-        habitIds: Array.from(new Set([
-          ...(Array.isArray(rt.habit_ids) ? rt.habit_ids : []),
-          ...((routineLinkedHabits || [])
-            .filter((habit: any) => habit.routine_id === rt.id)
-            .map((habit: any) => habit.id))
-        ])),
-        completedHistory: completedMap,
-      };
-    });
+    return getLocalRoutines(userId);
   },
 
   async createRoutine(rtData: {
@@ -439,50 +943,83 @@ export const api = {
     repeat: 'Daily' | 'Custom Days' | 'Today Only';
     habitIds: string[];
   }): Promise<Routine> {
-    const { data: userAuth } = await supabase.auth.getUser();
-    if (!userAuth.user) throw new ApiError('Not authenticated', 401);
+    const userId = await getEffectiveUserId();
 
-    const payload = {
-        user_id: userAuth.user.id,
-        name: rtData.name,
-        points: rtData.points || 50,
-        time_block: rtData.timeBlock,
-        repeat: rtData.repeat || 'Daily',
-        habit_ids: rtData.habitIds,
+    const newRoutine: Routine = {
+      id: `routine_${Date.now()}`,
+      name: rtData.name,
+      points: rtData.points || 50,
+      timeBlock: rtData.timeBlock,
+      repeat: rtData.repeat || 'Daily',
+      habitIds: rtData.habitIds || [],
+      completedHistory: {},
     };
 
-    const { data, error } = await supabase.from('routines').insert([payload]).select().single();
-    if (error) throw new ApiError(error.message, 500);
+    const routines = getLocalRoutines(userId);
+    routines.push(newRoutine);
+    saveLocalRoutines(userId, routines);
 
-    // Link routines back to habits
+    // Link habits to this routine
     if (rtData.habitIds && rtData.habitIds.length > 0) {
-        await supabase.from('habits').update({ routine_id: data.id }).in('id', rtData.habitIds);
+      const habits = getLocalHabits(userId);
+      habits.forEach((h) => {
+        if (rtData.habitIds.includes(h.id)) {
+          h.routineId = newRoutine.id;
+        }
+      });
+      saveLocalHabits(userId, habits);
     }
 
-    return {
-        id: data.id,
-        name: data.name,
-        points: data.points,
-        timeBlock: data.time_block as any,
-        repeat: data.repeat as any,
-        repeatDays: data.repeat_days,
-        habitIds: data.habit_ids || [],
-        completedHistory: {},
-    };
+    if (!supabaseKnownOffline) {
+      try {
+        const { data: userAuth } = await supabase.auth.getUser();
+        if (userAuth?.user) {
+          const payload = {
+            user_id: userAuth.user.id,
+            name: rtData.name,
+            points: rtData.points || 50,
+            time_block: rtData.timeBlock,
+            repeat: rtData.repeat || 'Daily',
+            habit_ids: rtData.habitIds,
+          };
+          const { data, error } = await supabase.from('routines').insert([payload]).select().single();
+          if (!error && data) {
+            newRoutine.id = data.id;
+          }
+        }
+      } catch {
+        supabaseKnownOffline = true;
+      }
+    }
+
+    return newRoutine;
   },
 
   async setRoutineStatus(routineId: string, date: string, completed: boolean) {
-    const { data: userAuth } = await supabase.auth.getUser();
-    if (!userAuth.user) throw new ApiError('Not authenticated', 401);
+    const userId = await getEffectiveUserId();
 
-    // Upsert on (routine_id, date) — race-safe
-    const { error } = await supabase
-      .from('routine_logs')
-      .upsert(
-        { routine_id: routineId, user_id: userAuth.user.id, date, completed },
-        { onConflict: 'routine_id,date' }
-      );
-    if (error) throw new ApiError(error.message, 500);
+    const routines = getLocalRoutines(userId);
+    const rt = routines.find((r) => r.id === routineId);
+    if (rt) {
+      rt.completedHistory[date] = completed;
+      saveLocalRoutines(userId, routines);
+    }
+
+    if (!supabaseKnownOffline) {
+      try {
+        const { data: userAuth } = await supabase.auth.getUser();
+        if (userAuth?.user) {
+          await supabase
+            .from('routine_logs')
+            .upsert(
+              { routine_id: routineId, user_id: userAuth.user.id, date, completed },
+              { onConflict: 'routine_id,date' }
+            );
+        }
+      } catch {
+        supabaseKnownOffline = true;
+      }
+    }
   },
 
   async updateRoutine(routineId: string, rtData: {
@@ -491,19 +1028,51 @@ export const api = {
     timeBlock?: 'Morning' | 'Evening' | 'Night' | 'Constant';
     repeat?: 'Daily' | 'Custom Days' | 'Today Only';
   }): Promise<void> {
-    const payload: any = {};
-    if (rtData.name !== undefined) payload.name = rtData.name;
-    if (rtData.points !== undefined) payload.points = rtData.points;
-    if (rtData.timeBlock !== undefined) payload.time_block = rtData.timeBlock;
-    if (rtData.repeat !== undefined) payload.repeat = rtData.repeat;
-    const { error } = await supabase.from('routines').update(payload).eq('id', routineId);
-    if (error) throw new ApiError(error.message, 500);
+    const userId = await getEffectiveUserId();
+
+    const routines = getLocalRoutines(userId);
+    const rt = routines.find((r) => r.id === routineId);
+    if (rt) {
+      if (rtData.name !== undefined) rt.name = rtData.name;
+      if (rtData.points !== undefined) rt.points = rtData.points;
+      if (rtData.timeBlock !== undefined) rt.timeBlock = rtData.timeBlock;
+      if (rtData.repeat !== undefined) rt.repeat = rtData.repeat;
+      saveLocalRoutines(userId, routines);
+    }
+
+    if (!supabaseKnownOffline) {
+      try {
+        const payload: any = {};
+        if (rtData.name !== undefined) payload.name = rtData.name;
+        if (rtData.points !== undefined) payload.points = rtData.points;
+        if (rtData.timeBlock !== undefined) payload.time_block = rtData.timeBlock;
+        if (rtData.repeat !== undefined) payload.repeat = rtData.repeat;
+        await supabase.from('routines').update(payload).eq('id', routineId);
+      } catch {
+        supabaseKnownOffline = true;
+      }
+    }
   },
 
   async deleteRoutine(routineId: string) {
-    const { error } = await supabase.from('routines').delete().eq('id', routineId);
-    if (error) throw new ApiError(error.message, 500);
+    const userId = await getEffectiveUserId();
 
-    await supabase.from('habits').update({ routine_id: null }).eq('routine_id', routineId);
+    const routines = getLocalRoutines(userId).filter((r) => r.id !== routineId);
+    saveLocalRoutines(userId, routines);
+
+    const habits = getLocalHabits(userId);
+    habits.forEach((h) => {
+      if (h.routineId === routineId) h.routineId = undefined;
+    });
+    saveLocalHabits(userId, habits);
+
+    if (!supabaseKnownOffline) {
+      try {
+        await supabase.from('routines').delete().eq('id', routineId);
+        await supabase.from('habits').update({ routine_id: null }).eq('routine_id', routineId);
+      } catch {
+        supabaseKnownOffline = true;
+      }
+    }
   },
 };

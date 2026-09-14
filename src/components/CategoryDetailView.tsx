@@ -16,6 +16,17 @@ export const getCategoryStyles = (category: Category) => {
   switch (category) {
     case 'Fitness':
       return {
+        color: '#E64980', // Rose
+        borderClass: 'border-l-[5px] border-l-[#E64980]',
+        textColor: 'text-[#E64980]',
+        accentClass: 'border-[#E64980]/20 bg-[#E64980]/5 text-[#E64980]',
+        progressBarClass: 'bg-[#E64980]',
+        buttonClass: 'border-[#E64980]/15 hover:bg-[#E64980]/20 text-[#E64980] hover:text-white',
+        inputFocusClass: 'focus:border-[#E64980]/60',
+        badgeClass: 'bg-[#E64980]/10 text-[#E64980] border border-[#E64980]/20'
+      };
+    case 'Diet':
+      return {
         color: '#12B886', // Emerald
         borderClass: 'border-l-[5px] border-l-[#12B886]',
         textColor: 'text-[#12B886]',
@@ -25,9 +36,9 @@ export const getCategoryStyles = (category: Category) => {
         inputFocusClass: 'focus:border-[#12B886]/60',
         badgeClass: 'bg-[#12B886]/10 text-[#12B886] border border-[#12B886]/20'
       };
-    case 'Reading':
+    case 'Career':
       return {
-        color: '#339AF0', // Bright Blue
+        color: '#339AF0', // Blue
         borderClass: 'border-l-[5px] border-l-[#339AF0]',
         textColor: 'text-[#339AF0]',
         accentClass: 'border-[#339AF0]/20 bg-[#339AF0]/5 text-[#339AF0]',
@@ -36,40 +47,7 @@ export const getCategoryStyles = (category: Category) => {
         inputFocusClass: 'focus:border-[#339AF0]/60',
         badgeClass: 'bg-[#339AF0]/10 text-[#339AF0] border border-[#339AF0]/20'
       };
-    case 'Diet':
-      return {
-        color: '#FD7E14', // Orange
-        borderClass: 'border-l-[5px] border-l-[#FD7E14]',
-        textColor: 'text-[#FD7E14]',
-        accentClass: 'border-[#FD7E14]/20 bg-[#FD7E14]/5 text-[#FD7E14]',
-        progressBarClass: 'bg-[#FD7E14]',
-        buttonClass: 'border-[#FD7E14]/15 hover:bg-[#FD7E14]/20 text-[#FD7E14] hover:text-white',
-        inputFocusClass: 'focus:border-[#FD7E14]/60',
-        badgeClass: 'bg-[#FD7E14]/10 text-[#FD7E14] border border-[#FD7E14]/20'
-      };
-    case 'Skill':
-      return {
-        color: '#FCC419', // Amber Yellow
-        borderClass: 'border-l-[5px] border-l-[#FCC419]',
-        textColor: 'text-[#FCC419]',
-        accentClass: 'border-[#FCC419]/25 bg-[#FCC419]/5 text-[#FCC419]',
-        progressBarClass: 'bg-[#FCC419]',
-        buttonClass: 'border-[#FCC419]/15 hover:bg-[#FCC419]/20 text-[#FCC419] hover:text-white',
-        inputFocusClass: 'focus:border-[#FCC419]/60',
-        badgeClass: 'bg-[#FCC419]/10 text-[#FCC419] border border-[#FCC419]/20'
-      };
-    case 'Mindset':
-      return {
-        color: '#845EF7', // Grape Violet
-        borderClass: 'border-l-[5px] border-l-[#845EF7]',
-        textColor: 'text-[#B197FC]',
-        accentClass: 'border-[#845EF7]/20 bg-[#845EF7]/5 text-[#B197FC]',
-        progressBarClass: 'bg-[#845EF7]',
-        buttonClass: 'border-[#845EF7]/15 hover:bg-[#845EF7]/20 text-[#845EF7] hover:text-white',
-        inputFocusClass: 'focus:border-[#845EF7]/60',
-        badgeClass: 'bg-[#845EF7]/10 text-[#B197FC] border border-[#845EF7]/20'
-      };
-    case 'Rest':
+    case 'Recovery':
       return {
         color: '#06B6D4', // Cyan
         borderClass: 'border-l-[5px] border-l-[#06B6D4]',
@@ -79,6 +57,17 @@ export const getCategoryStyles = (category: Category) => {
         buttonClass: 'border-[#06B6D4]/15 hover:bg-[#06B6D4]/20 text-[#06B6D4] hover:text-white',
         inputFocusClass: 'focus:border-[#06B6D4]/60',
         badgeClass: 'bg-[#06B6D4]/10 text-[#06B6D4] border border-[#06B6D4]/20'
+      };
+    case 'Mind':
+      return {
+        color: '#845EF7', // Purple
+        borderClass: 'border-l-[5px] border-l-[#845EF7]',
+        textColor: 'text-[#B197FC]',
+        accentClass: 'border-[#845EF7]/20 bg-[#845EF7]/5 text-[#B197FC]',
+        progressBarClass: 'bg-[#845EF7]',
+        buttonClass: 'border-[#845EF7]/15 hover:bg-[#845EF7]/20 text-[#845EF7] hover:text-white',
+        inputFocusClass: 'focus:border-[#845EF7]/60',
+        badgeClass: 'bg-[#845EF7]/10 text-[#B197FC] border border-[#845EF7]/20'
       };
     default:
       return {

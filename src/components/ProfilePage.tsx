@@ -5,7 +5,6 @@ import {
 } from 'lucide-react';
 import { Habit } from '../types';
 import { calculateMomentum, dateToday } from '../data';
-import { getLevelConfig } from './OnePercentBetterPage';
 
 const REMINDER_KEY = 'habit_mountain_reminder_settings';
 
@@ -81,8 +80,16 @@ function computeOnePercentGrowth(habits: Habit[]): { growth: number; streak: num
     runningGrowth = Math.round(runningGrowth * 100) / 100;
   });
 
-  const levelConfig = getLevelConfig(runningGrowth);
+  const levelConfig = getLevelConfigLocal(runningGrowth);
   return { growth: runningGrowth, streak: greatStreak, levelName: levelConfig.title };
+}
+
+function getLevelConfigLocal(growth: number): { title: string; color: string; glowColor: string; textColor: string } {
+  if (growth >= 301) return { title: '90-Day Legend', color: '#F1C40F', glowColor: '#F1C40F', textColor: 'text-yellow-400' };
+  if (growth >= 201) return { title: 'Locked In', color: '#6C63FF', glowColor: '#6C63FF', textColor: 'text-purple-400' };
+  if (growth >= 121) return { title: 'Flow State', color: '#12B886', glowColor: '#12B886', textColor: 'text-emerald-400' };
+  if (growth >= 51) return { title: 'Ignition', color: '#FF6B35', glowColor: '#FF6B35', textColor: 'text-orange-400' };
+  return { title: 'Just Starting', color: '#868E96', glowColor: '#868E96', textColor: 'text-gray-400' };
 }
 
 function getMomentumLabel(score: number): string {
@@ -114,7 +121,7 @@ export default function ProfilePage({
 
   const { stateName } = calculateMomentum(habits);
   const { growth, streak, levelName } = computeOnePercentGrowth(habits);
-  const onePctConfig = getLevelConfig(growth);
+  const onePctConfig = getLevelConfigLocal(growth);
 
   const doneToday = habits.filter((h) => (h.history[dateToday] || 0) >= h.target).length;
 

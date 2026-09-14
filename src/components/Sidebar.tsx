@@ -2,10 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, 
   CheckSquare, 
-  Activity, 
+  Plus, 
   TrendingUp, 
-  Calendar,
-  BarChart3, 
   Sparkles, 
   RefreshCw, 
   ChevronLeft,
@@ -19,9 +17,10 @@ interface SidebarProps {
   userPoints: number;
   momentumScore: number;
   onReset?: () => void;
+  onAddClick?: () => void;
 }
 
-export default function Sidebar({ currentTab, setTab, userPoints, momentumScore, onReset }: SidebarProps) {
+export default function Sidebar({ currentTab, setTab, userPoints, momentumScore, onReset, onAddClick }: SidebarProps) {
   // Read state from localStorage to persist user layout preference
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     return localStorage.getItem('sidebar-collapsed') === 'true';
@@ -33,12 +32,10 @@ export default function Sidebar({ currentTab, setTab, userPoints, momentumScore,
   }, [isCollapsed]);
 
   const menuItems = [
-    { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard },
-    { id: 'habits', name: 'Habits', icon: CheckSquare },
-    { id: 'momentum', name: 'Momentum', icon: Activity, badge: `${momentumScore}%` },
-    { id: '1%better', name: '1% Better', icon: TrendingUp },
-    { id: 'calendar', name: 'Calendar', icon: Calendar, isNew: true },
-    { id: 'insights', name: 'Insights', icon: BarChart3 },
+    { id: 'dashboard', name: 'Home', icon: LayoutDashboard },
+    { id: 'habits', name: 'Today', icon: CheckSquare },
+    { id: 'add', name: 'Add', icon: Plus, isAction: true },
+    { id: 'progress', name: 'Progress', icon: TrendingUp },
     { id: 'profile', name: 'Profile', icon: User }
   ];
 
@@ -79,7 +76,13 @@ export default function Sidebar({ currentTab, setTab, userPoints, momentumScore,
               <button
                 key={item.id}
                 id={`sidebar-link-${item.id}`}
-                onClick={() => setTab(item.id)}
+                onClick={() => {
+                  if (item.isAction) {
+                    onAddClick?.();
+                  } else {
+                    setTab(item.id);
+                  }
+                }}
                 title={isCollapsed ? item.name : undefined}
                 className={`w-full flex items-center rounded-lg text-sm font-medium transition-all duration-200 group relative ${
                   isActive
@@ -91,22 +94,6 @@ export default function Sidebar({ currentTab, setTab, userPoints, momentumScore,
                   <Icon className={`w-4 h-4 transition-transform duration-200 group-hover:scale-110 ${isActive ? 'text-[#12B886]' : 'text-gray-500 group-hover:text-gray-300'}`} />
                   {!isCollapsed && <span className="font-sans whitespace-nowrap">{item.name}</span>}
                 </div>
-                
-                {!isCollapsed && item.badge && (
-                  <span className="text-[10px] font-mono font-semibold bg-[#FA5252]/10 text-[#FA5252] border border-[#FA5252]/20 px-1.5 py-0.5 rounded-md">
-                    {item.badge}
-                  </span>
-                )}
-
-                {!isCollapsed && item.isNew && (
-                  <span className="text-[9px] font-sans font-medium bg-[#12B886]/10 text-[#12B886] border border-[#12B886]/40 px-1.5 py-0.5 rounded-full">
-                    New
-                  </span>
-                )}
-
-                {isCollapsed && (item.badge || item.isNew) && (
-                  <span className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full ${item.isNew ? 'bg-[#12B886]' : 'bg-[#FA5252]'}`} />
-                )}
               </button>
             );
           })}

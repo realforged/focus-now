@@ -3,10 +3,7 @@ import Sidebar from './components/Sidebar';
 import BottomNav from './components/BottomNav';
 import Dashboard from './components/Dashboard';
 import HabitsPage from './components/HabitsPage';
-import MomentumPage from './components/MomentumPage';
-import OnePercentBetterPage from './components/OnePercentBetterPage';
-import CalendarPage from './components/CalendarPage';
-import InsightsPage from './components/InsightsPage';
+import ProgressPage from './components/ProgressPage';
 import ProfilePage from './components/ProfilePage';
 import AuthPage from './components/AuthPage';
 import { CreateHabitModal, CreateRoutineModal } from './components/Modals';
@@ -14,7 +11,8 @@ import { ToastProvider, useToast, ConfirmDialog } from './components/Toast';
 import { Habit, Category, Routine } from './types';
 import { calculateMomentum, dateToday, calculateTotalEarnedPoints, getScheduledHabits, getRoutineHabits } from './data';
 import { api, ApiError } from './api';
-import { Zap } from 'lucide-react';
+import { Zap, Plus, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
   return (
@@ -35,6 +33,8 @@ function AppInner() {
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [userPoints, setUserPoints] = useState<number>(0);
   const [appLoading, setAppLoading] = useState<boolean>(true);
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
+  const [showDietModalDirectly, setShowDietModalDirectly] = useState(false);
 
   // Confirm dialog state
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -395,7 +395,7 @@ function AppInner() {
         const name = rtData.habitNames[i];
         const hRes = await api.createHabit({
           name,
-          category: rtData.category || 'Skill',
+          category: rtData.category || 'Career',
           points: 10,
           type: 'Count',
           target: 10,
@@ -545,7 +545,7 @@ function AppInner() {
   const { score: currentLiveMomentumScore } = calculateMomentum(habits, routines);
 
   return (
-    <div className="flex flex-col md:flex-row bg-[#0A0B0E] min-h-screen text-gray-100 font-sans antialiased overflow-x-hidden">
+    <div className="flex flex-col md:flex-row bg-white min-h-screen text-gray-900 font-sans antialiased overflow-x-hidden">
       
       {/* 1. Sidebar Left */}
       <Sidebar
@@ -558,10 +558,11 @@ function AppInner() {
         userPoints={userPoints}
         momentumScore={currentLiveMomentumScore}
         onReset={handleResetApp}
+        onAddClick={() => setIsAddMenuOpen(true)}
       />
 
       {/* 2. Main Content Body */}
-      <main className="flex-1 p-4 md:p-10 pb-24 md:pb-10 max-h-screen overflow-y-auto relative">
+      <main className="flex-1 pb-24 md:pb-10 max-h-screen overflow-y-auto relative bg-[#F4F6F9]">
         {/* Tab Routing orchestrations */}
         {currentTab === 'dashboard' && (
           <Dashboard
@@ -575,6 +576,8 @@ function AppInner() {
             setSelectedCategoryId={setSelectedCategoryId}
             onDeleteHabit={handleDeleteHabit}
             onCreateHabitInRoutine={handleCreateHabitInRoutine}
+            showDietModalDirectly={showDietModalDirectly}
+            onCloseDietModalDirectly={() => setShowDietModalDirectly(false)}
           />
         )}
 
@@ -597,30 +600,10 @@ function AppInner() {
           />
         )}
 
-        {currentTab === 'momentum' && (
-          <MomentumPage
+        {currentTab === 'progress' && (
+          <ProgressPage
             habits={habits}
             routines={routines}
-          />
-        )}
-
-        {currentTab === '1%better' && (
-          <OnePercentBetterPage
-            habits={habits}
-          />
-        )}
-
-        {currentTab === 'calendar' && (
-          <CalendarPage
-            habits={habits}
-            routines={routines}
-            onLogHabitForDate={handleLogHabitForDate}
-          />
-        )}
-
-        {currentTab === 'insights' && (
-          <InsightsPage
-            habits={habits}
             userPoints={userPoints}
           />
         )}
@@ -646,7 +629,128 @@ function AppInner() {
           setSelectedRoutineId(null);
           setSelectedCategoryId(null);
         }}
+        onAddClick={() => setIsAddMenuOpen(true)}
       />
+
+      {/* Add Action Bottom Sheet */}
+      <AnimatePresence>
+        {isAddMenuOpen && (
+          <div
+            className="fixed inset-0 z-[100] flex items-end justify-center"
+            onClick={() => setIsAddMenuOpen(false)}
+          >
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            />
+
+            {/* Sheet */}
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="relative w-full max-w-lg bg-white rounded-t-3xl p-6 pb-10 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Handle */}
+              <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-6" />
+
+              {/* Header */}
+              <div className="flex items-start justify-between mb-6">
+                <div>
+                  <h2 className="text-2xl font-black text-gray-900">Create</h2>
+                  <p className="text-sm text-gray-500 mt-0.5">Add something to your mission</p>
+                </div>
+                <button
+                  onClick={() => setIsAddMenuOpen(false)}
+                  className="w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Action Grid — 2x3 */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* Habit */}
+                <button
+                  onClick={() => { setIsAddMenuOpen(false); openCreateHabit(); }}
+                  className="p-4 rounded-2xl border border-gray-100 bg-gray-50 hover:bg-green-50 hover:border-green-200 text-left transition-all active:scale-[0.97] cursor-pointer"
+                >
+                  <div className="w-11 h-11 rounded-xl bg-green-100 flex items-center justify-center mb-3">
+                    <span className="text-xl font-black text-green-600">H</span>
+                  </div>
+                  <p className="font-bold text-gray-900 text-sm">Habit</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Track one daily action</p>
+                </button>
+
+                {/* Routine */}
+                <button
+                  onClick={() => { setIsAddMenuOpen(false); setIsRoutineModalOpen(true); }}
+                  className="p-4 rounded-2xl border border-gray-100 bg-gray-50 hover:bg-blue-50 hover:border-blue-200 text-left transition-all active:scale-[0.97] cursor-pointer"
+                >
+                  <div className="w-11 h-11 rounded-xl bg-blue-100 flex items-center justify-center mb-3">
+                    <span className="text-xl font-black text-blue-600">R</span>
+                  </div>
+                  <p className="font-bold text-gray-900 text-sm">Routine</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Stack habits together</p>
+                </button>
+
+                {/* Pillar Goal */}
+                <button
+                  onClick={() => { setIsAddMenuOpen(false); openCreateHabit(); }}
+                  className="p-4 rounded-2xl border border-gray-100 bg-gray-50 hover:bg-purple-50 hover:border-purple-200 text-left transition-all active:scale-[0.97] cursor-pointer"
+                >
+                  <div className="w-11 h-11 rounded-xl bg-purple-100 flex items-center justify-center mb-3">
+                    <span className="text-xl font-black text-purple-600">G</span>
+                  </div>
+                  <p className="font-bold text-gray-900 text-sm">Pillar Goal</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Add a 90-day target</p>
+                </button>
+
+                {/* Diet Targets */}
+                <button
+                  onClick={() => { setIsAddMenuOpen(false); setTab('dashboard'); setShowDietModalDirectly(true); }}
+                  className="p-4 rounded-2xl border border-gray-100 bg-gray-50 hover:bg-yellow-50 hover:border-yellow-200 text-left transition-all active:scale-[0.97] cursor-pointer"
+                >
+                  <div className="w-11 h-11 rounded-xl bg-yellow-100 flex items-center justify-center mb-3">
+                    <span className="text-xl font-black text-yellow-600">D</span>
+                  </div>
+                  <p className="font-bold text-gray-900 text-sm">Diet Targets</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Edit macros and calories</p>
+                </button>
+
+                {/* Food Log */}
+                <button
+                  onClick={() => { setIsAddMenuOpen(false); setTab('dashboard'); setShowDietModalDirectly(true); }}
+                  className="p-4 rounded-2xl border border-gray-100 bg-gray-50 hover:bg-orange-50 hover:border-orange-200 text-left transition-all active:scale-[0.97] cursor-pointer"
+                >
+                  <div className="w-11 h-11 rounded-xl bg-orange-100 flex items-center justify-center mb-3">
+                    <span className="text-xl font-black text-orange-600">F</span>
+                  </div>
+                  <p className="font-bold text-gray-900 text-sm">Food Log</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Log a meal with macros</p>
+                </button>
+
+                {/* Journal */}
+                <button
+                  onClick={() => { setIsAddMenuOpen(false); }}
+                  className="p-4 rounded-2xl border border-gray-100 bg-gray-50 hover:bg-indigo-50 hover:border-indigo-200 text-left transition-all active:scale-[0.97] cursor-pointer"
+                >
+                  <div className="w-11 h-11 rounded-xl bg-indigo-100 flex items-center justify-center mb-3">
+                    <span className="text-xl font-black text-indigo-600">J</span>
+                  </div>
+                  <p className="font-bold text-gray-900 text-sm">Journal</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Capture a reflection</p>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* 3. Global Control Modals */}
       <CreateHabitModal

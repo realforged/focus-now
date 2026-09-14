@@ -1,4 +1,15 @@
-export type Category = 'Fitness' | 'Reading' | 'Diet' | 'Skill' | 'Mindset' | 'Rest';
+﻿export type Category = 'Fitness' | 'Diet' | 'Career' | 'Recovery' | 'Mind';
+
+export interface FoodLogEntry {
+  id: string;
+  name: string;
+  protein: number;
+  carbs: number;
+  fats: number;
+  fiber: number;
+  calories: number;
+  date: string; // YYYY-MM-DD
+}
 
 
 export type HabitType = 'Count' | 'Timer';
@@ -68,3 +79,48 @@ export interface UserStats {
     };
   };
 }
+
+// â”€â”€â”€ Challenge / 90-Day engine types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+export type ChallengePillarId = 'fitness' | 'diet' | 'career' | 'recovery' | 'mind';
+
+export interface ChallengePillar {
+  id: ChallengePillarId;
+  name: string;
+  categories: Category[];
+  color: string;
+  accentColor: string;
+  icon: string;
+  customTargets: { id: string; label: string }[];
+}
+
+export interface ChallengeConfig {
+  startDate: string; // YYYY-MM-DD
+  pillars: Partial<Record<ChallengePillarId, ChallengePillar>>;
+  completedDays?: number[];
+  customTargetLogs?: Record<string, Record<string, boolean>>;
+  milestones: number[];
+  isActive: boolean;
+}
+
+export interface DayReport {
+  day: number;
+  dayNumber: number;
+  date: string;
+  overallScore: number;
+  pillarScores: Partial<Record<ChallengePillarId, number>>;
+  habitsDone?: number;
+  habitsTotal?: number;
+  grade: string;
+  future: boolean;
+  locked: boolean;
+}
+
+export interface MilestoneBadge {
+  day: number;
+  title: string;
+  icon: string;
+  unlockedAt?: string;
+  unlocked?: boolean;
+  seen?: boolean;
+}
+

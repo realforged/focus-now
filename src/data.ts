@@ -192,7 +192,7 @@ export const INITIAL_HABITS: Habit[] = [
   {
     id: 'habit-4',
     name: 'Read Geopolitics',
-    category: 'Reading',
+    category: 'Mind',
     points: 10,
     type: 'Count',
     target: 10,
@@ -212,7 +212,7 @@ export const INITIAL_HABITS: Habit[] = [
   {
     id: 'habit-5',
     name: 'Deep Practice',
-    category: 'Skill',
+    category: 'Career',
     points: 15,
     type: 'Timer',
     target: 45,
@@ -232,7 +232,7 @@ export const INITIAL_HABITS: Habit[] = [
   {
     id: 'habit-6',
     name: 'Inward Meditation',
-    category: 'Mindset',
+    category: 'Mind',
     points: 10,
     type: 'Timer',
     target: 10,
@@ -287,15 +287,14 @@ export const INITIAL_ROUTINES: Routine[] = [
 ];
 
 export const mapLegacyCategory = (cat: string): Category => {
-  if (!cat) return 'Skill';
+  if (!cat) return 'Career';
   const c = cat.trim().toLowerCase();
   if (c === 'fitness' || c === 'physical') return 'Fitness';
-  if (c === 'reading') return 'Reading';
-  if (c === 'health' || c === 'diet') return 'Diet';
-  if (c === 'productivity' || c === 'study' || c === 'skill' || c === 'custom') return 'Skill';
-  if (c === 'mindfulness' || c === 'social' || c === 'mindset') return 'Mindset';
-  if (c === 'rest') return 'Rest';
-  return 'Skill';
+  if (c === 'diet' || c === 'health') return 'Diet';
+  if (c === 'productivity' || c === 'study' || c === 'skill' || c === 'career' || c === 'custom') return 'Career';
+  if (c === 'rest' || c === 'recovery' || c === 'sleep') return 'Recovery';
+  if (c === 'reading' || c === 'mindfulness' || c === 'social' || c === 'mindset' || c === 'mind') return 'Mind';
+  return 'Career';
 };
 
 // Generates a mock stats profile showing inertia state today since they haven't completed anything yet,

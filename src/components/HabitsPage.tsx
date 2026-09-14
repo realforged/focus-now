@@ -3,7 +3,8 @@ import {
   Zap, Clock, Repeat, Plus, Check, Play, Pause, RotateCcw,
   ChevronLeft, MoreVertical, Trash2, Pencil, Undo2,
   Dumbbell, BookOpen, Heart, Brain, Sparkles, CalendarDays,
-  Target, Moon, ListChecks, CheckCircle2, TrendingUp, FlameKindling
+  Target, Moon, ListChecks, CheckCircle2, TrendingUp, FlameKindling,
+  Star
 } from 'lucide-react';
 import { Habit, Category, Routine } from '../types';
 import { dateToday, isHabitScheduledForDate, formatDateString, getStandaloneHabits, getRoutineHabits } from '../data';
@@ -11,13 +12,12 @@ import CategoryDetailView from './CategoryDetailView';
 import { useToast } from './Toast';
 
 // ─── CATEGORY CONFIG ───────────────────────────────────────────────────────────
-const CAT_CFG: Record<string, { color: string; emoji: string; icon: React.ElementType }> = {
-  Fitness:  { color: '#12B886', emoji: '🏃', icon: Dumbbell },
-  Reading:  { color: '#339AF0', emoji: '📚', icon: BookOpen },
-  Diet:     { color: '#FD7E14', emoji: '🥗', icon: Heart },
-  Skill:    { color: '#FCC419', emoji: '🎯', icon: Target },
-  Mindset:  { color: '#845EF7', emoji: '🧘', icon: Brain },
-  Rest:     { color: '#06B6D4', emoji: '😴', icon: Moon },
+const CAT_CFG: Record<Category, { color: string; emoji: string; icon: React.ElementType }> = {
+  Fitness:  { color: '#E64980', emoji: '🏃', icon: Dumbbell },
+  Diet:     { color: '#12B886', emoji: '🥗', icon: Heart },
+  Career:   { color: '#339AF0', emoji: '🎯', icon: Target },
+  Recovery: { color: '#06B6D4', emoji: '😴', icon: Moon },
+  Mind:     { color: '#845EF7', emoji: '🧘', icon: Brain },
 };
 
 const getCatConfig = (cat: Category) => CAT_CFG[cat] ?? { color: '#868E96', emoji: '⭐', icon: Sparkles };
@@ -25,7 +25,7 @@ const getCatConfig = (cat: Category) => CAT_CFG[cat] ?? { color: '#868E96', emoj
 // ─── ROUTINE DOMINANT CATEGORY ────────────────────────────────────────────────
 const getRoutineDomCategory = (routine: Routine, habits: Habit[]): Category => {
   const rh = getRoutineHabits(routine, habits);
-  if (rh.length === 0) return 'Mindset';
+  if (rh.length === 0) return 'Mind';
   const counts: Record<string, number> = {};
   rh.forEach(h => { counts[h.category] = (counts[h.category] || 0) + 1; });
   let maxCat: Category = rh[0].category;
@@ -87,6 +87,23 @@ export default function HabitsPage({
   selectedRoutineId, setSelectedRoutineId, selectedCategoryId, setSelectedCategoryId,
 }: HabitsPageProps) {
   const toast = useToast();
+  const [starredHabits, setStarredHabits] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('starred_habits');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const toggleStarHabit = (id: string) => {
+    const next = starredHabits.includes(id)
+      ? starredHabits.filter((x) => x !== id)
+      : [...starredHabits, id];
+    setStarredHabits(next);
+    localStorage.setItem('starred_habits', JSON.stringify(next));
+  };
+
   const [activeSubTab,      setActiveSubTab]      = useState<'all'|'routines'>('all');
   const [selectedFilter,    setSelectedFilter]    = useState<'active'|'completed'>('active');
   const [selectedCategory,  setSelectedCategory]  = useState<Category|'All'>('All');
@@ -428,7 +445,7 @@ export default function HabitsPage({
 
       {/* Category filter row */}
       <div className="flex flex-nowrap items-center gap-2 border-b border-[#1A1D24] pb-4 overflow-x-auto scrollbar-hide">
-        {(['All','Fitness','Reading','Diet','Skill','Mindset','Rest'] as const).map(cat => {
+        {(['All','Fitness','Diet','Career','Recovery','Mind'] as const).map(cat => {
           const isA = selectedCategory === cat;
           const prog = cat !== 'All' ? getCategoryStats(cat as Category) : 0;
           const color = cat !== 'All' ? getCatConfig(cat as Category).color : '#4ecf7f';
@@ -541,9 +558,17 @@ export default function HabitsPage({
                           <div className="space-y-3">
                             {/* Name + menu */}
                             <div className="flex items-start justify-between gap-2">
-                              <div className="flex items-center gap-2">
-                                <span style={{ fontSize: 18 }}>{cfg.emoji}</span>
-                                <h4 className="text-base font-extrabold text-white tracking-tight leading-tight">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleStarHabit(item.id)}
+                                  className={`transition cursor-pointer ${starredHabits.includes(item.id) ? 'text-amber-400' : 'text-gray-600 hover:text-gray-400'}`}
+                                  title="Pin to Today Focus"
+                                >
+                                  <Star className={`w-4 h-4 ${starredHabits.includes(item.id) ? 'fill-amber-400' : ''}`} />
+                                </button>
+                                <span style={{ fontSize: 18 }} className="select-none">{cfg.emoji}</span>
+                                <h4 className="text-base font-extrabold text-white tracking-tight leading-tight truncate">
                                   {item.name}
                                 </h4>
                               </div>
