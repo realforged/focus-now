@@ -1,47 +1,60 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Zap, Clock, Repeat, Plus, Check, Play, Pause, RotateCcw,
-  ChevronLeft, MoreVertical, Trash2, Pencil, Undo2,
-  Dumbbell, BookOpen, Heart, Brain, Sparkles, CalendarDays,
-  Target, Moon, ListChecks, CheckCircle2, TrendingUp, FlameKindling,
-  Star
+  Check, Plus, Star, Flame, CalendarDays, ChevronDown, ChevronUp,
+  ChevronLeft, Clock, Play, Pause, RotateCcw,
+  Dumbbell, Heart, Target, Moon, Brain, Sparkles, MoreVertical,
+  Pencil, Trash2, Undo2
 } from 'lucide-react';
 import { Habit, Category, Routine } from '../types';
-import { dateToday, isHabitScheduledForDate, formatDateString, getStandaloneHabits, getRoutineHabits } from '../data';
+import {
+  dateToday,
+  formatDateString,
+  isHabitScheduledForDate,
+  getScheduledHabits,
+  getStandaloneHabits,
+  getRoutineHabits
+} from '../data';
 import CategoryDetailView from './CategoryDetailView';
 import { useToast } from './Toast';
 
-// ─── CATEGORY CONFIG ───────────────────────────────────────────────────────────
-const CAT_CFG: Record<Category, { color: string; emoji: string; icon: React.ElementType }> = {
-  Fitness:  { color: '#E64980', emoji: '🏃', icon: Dumbbell },
-  Diet:     { color: '#12B886', emoji: '🥗', icon: Heart },
-  Career:   { color: '#339AF0', emoji: '🎯', icon: Target },
-  Recovery: { color: '#06B6D4', emoji: '😴', icon: Moon },
-  Mind:     { color: '#845EF7', emoji: '🧘', icon: Brain },
+// ─── 5 PILLARS CONFIG ──────────────────────────────────────────────────────────
+const PILLAR_MAP: Record<Category, { color: string; bg: string; text: string; icon: React.ElementType }> = {
+  Fitness:  { color: '#E64980', bg: 'bg-pink-50',   text: 'text-pink-600',   icon: Dumbbell },
+  Diet:     { color: '#10B981', bg: 'bg-emerald-50',text: 'text-emerald-600',icon: Heart },
+  Career:   { color: '#3B82F6', bg: 'bg-blue-50',   text: 'text-blue-600',   icon: Target },
+  Recovery: { color: '#06B6D4', bg: 'bg-cyan-50',   text: 'text-cyan-600',   icon: Moon },
+  Mind:     { color: '#8B5CF6', bg: 'bg-purple-50', text: 'text-purple-600', icon: Brain },
 };
 
-const getCatConfig = (cat: Category) => CAT_CFG[cat] ?? { color: '#868E96', emoji: '⭐', icon: Sparkles };
-
-// ─── ROUTINE DOMINANT CATEGORY ────────────────────────────────────────────────
-const getRoutineDomCategory = (routine: Routine, habits: Habit[]): Category => {
-  const rh = getRoutineHabits(routine, habits);
-  if (rh.length === 0) return 'Mind';
-  const counts: Record<string, number> = {};
-  rh.forEach(h => { counts[h.category] = (counts[h.category] || 0) + 1; });
-  let maxCat: Category = rh[0].category;
-  let maxN = 0;
-  Object.keys(counts).forEach(cat => {
-    if (counts[cat]! > maxN) { maxN = counts[cat]!; maxCat = cat as Category; }
-  });
-  return maxCat;
+const getPillarConfig = (cat: Category) => PILLAR_MAP[cat] ?? {
+  color: '#6B7280',
+  bg: 'bg-gray-50',
+  text: 'text-gray-600',
+  icon: Sparkles
 };
 
-const getHabitTimeframeLocal = (habit: Habit, routines: Routine[]): 'Morning'|'Evening'|'Night'|'Anytime' => {
-  const parent = routines.find(r => r.habitIds.includes(habit.id) || habit.routineId === r.id);
-  if (parent) {
-    if (parent.timeBlock === 'Morning') return 'Morning';
-    if (parent.timeBlock === 'Evening') return 'Evening';
-    if (parent.timeBlock === 'Night')   return 'Night';
+// ─── TIME BLOCKS ──────────────────────────────────────────────────────────────
+interface TimeBlockConfig {
+  id: 'Morning' | 'Afternoon' | 'Evening' | 'Anytime';
+  label: string;
+  emoji: string;
+  hours: string;
+  defaultMinutes: number;
+}
+
+const TIME_BLOCKS: TimeBlockConfig[] = [
+  { id: 'Morning',   label: 'Morning',   emoji: '☀️',  hours: '6:00 AM – 11:00 AM', defaultMinutes: 85 },
+  { id: 'Afternoon', label: 'Afternoon', emoji: '🌤️', hours: '11:00 AM – 5:00 PM',  defaultMinutes: 110 },
+  { id: 'Evening',   label: 'Evening',   emoji: '🌙',  hours: '5:00 PM – 11:00 PM', defaultMinutes: 45 },
+  { id: 'Anytime',   label: 'Anytime Disciplines', emoji: '⚡', hours: 'All Day Habit Stack', defaultMinutes: 30 },
+];
+
+function classifyHabitTimeframe(habit: Habit, routines: Routine[]): 'Morning' | 'Afternoon' | 'Evening' | 'Anytime' {
+  const parentRoutine = routines.find(r => r.habitIds.includes(habit.id) || habit.routineId === r.id);
+  if (parentRoutine) {
+    if (parentRoutine.timeBlock === 'Morning') return 'Morning';
+    if (parentRoutine.timeBlock === 'Evening') return 'Evening';
+    if (parentRoutine.timeBlock === 'Night') return 'Evening';
   }
   if (habit.timeOfDay) {
     const tod = habit.timeOfDay.toLowerCase().trim();
@@ -51,18 +64,17 @@ const getHabitTimeframeLocal = (habit: Habit, routines: Routine[]): 'Morning'|'E
       let hr = parseInt(m[1], 10);
       if (m[3] === 'pm' && hr < 12) hr += 12;
       if (m[3] === 'am' && hr === 12) hr = 0;
-      if (hr >= 4 && hr < 12)  return 'Morning';
-      if (hr >= 12 && hr < 18) return 'Evening';
-      return 'Night';
+      if (hr >= 5 && hr < 11) return 'Morning';
+      if (hr >= 11 && hr < 17) return 'Afternoon';
+      return 'Evening';
     }
-    if (tod.includes('morning'))                              return 'Morning';
-    if (tod.includes('evening') || tod.includes('afternoon')) return 'Evening';
-    if (tod.includes('night'))                                return 'Night';
+    if (tod.includes('morning')) return 'Morning';
+    if (tod.includes('afternoon')) return 'Afternoon';
+    if (tod.includes('evening') || tod.includes('night')) return 'Evening';
   }
   return 'Anytime';
-};
+}
 
-// ─── PROPS ────────────────────────────────────────────────────────────────────
 interface HabitsPageProps {
   habits: Habit[];
   routines: Routine[];
@@ -81,12 +93,30 @@ interface HabitsPageProps {
 }
 
 export default function HabitsPage({
-  habits, routines, onLogHabit, onDeleteHabit, deletingHabitId,
-  openCreateHabit, openCreateRoutine, onEditHabit, onRevertHabit,
+  habits,
+  routines,
+  onLogHabit,
+  onDeleteHabit,
+  onEditHabit,
+  onRevertHabit,
   onDeleteRoutine,
-  selectedRoutineId, setSelectedRoutineId, selectedCategoryId, setSelectedCategoryId,
+  selectedRoutineId,
+  setSelectedRoutineId,
+  selectedCategoryId,
+  setSelectedCategoryId,
 }: HabitsPageProps) {
   const toast = useToast();
+
+  // Selected date (defaults to dateToday)
+  const [selectedDate, setSelectedDate] = useState<string>(dateToday);
+
+  // View mode: 'time' vs 'pillar'
+  const [viewMode, setViewMode] = useState<'time' | 'pillar'>('time');
+
+  // Collapsed time blocks
+  const [collapsedBlocks, setCollapsedBlocks] = useState<Record<string, boolean>>({});
+
+  // Starred habits for Today's Focus on Home
   const [starredHabits, setStarredHabits] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('starred_habits');
@@ -98,22 +128,21 @@ export default function HabitsPage({
 
   const toggleStarHabit = (id: string) => {
     const next = starredHabits.includes(id)
-      ? starredHabits.filter((x) => x !== id)
+      ? starredHabits.filter(x => x !== id)
       : [...starredHabits, id];
     setStarredHabits(next);
     localStorage.setItem('starred_habits', JSON.stringify(next));
   };
 
-  const [activeSubTab,      setActiveSubTab]      = useState<'all'|'routines'>('all');
-  const [selectedFilter,    setSelectedFilter]    = useState<'active'|'completed'>('active');
-  const [selectedCategory,  setSelectedCategory]  = useState<Category|'All'>('All');
-  const [expandedHabitId,   setExpandedHabitId]   = useState<string | null>(null);
-  const [menuOpenId,        setMenuOpenId]        = useState<string | null>(null);
-  const [activeTimerId,     setActiveTimerId]     = useState<string | null>(null);
-  const [timeLeft,          setTimeLeft]          = useState<number>(0);
-  const [isTimerRunning,    setIsTimerRunning]    = useState<boolean>(false);
+  const toggleBlockCollapse = (blockId: string) => {
+    setCollapsedBlocks(prev => ({ ...prev, [blockId]: !prev[blockId] }));
+  };
 
-  // Focus timer tick
+  // Active focus timer
+  const [activeTimerId, setActiveTimerId] = useState<string | null>(null);
+  const [timeLeft, setTimeLeft] = useState<number>(0);
+  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
+
   useEffect(() => {
     let id: any = null;
     if (isTimerRunning && activeTimerId && timeLeft > 0) {
@@ -121,10 +150,10 @@ export default function HabitsPage({
         setTimeLeft(prev => {
           if (prev <= 1) {
             setIsTimerRunning(false);
-            const h = habits.find(h => h.id === activeTimerId);
+            const h = habits.find(x => x.id === activeTimerId);
             if (h) {
               onLogHabit(h.id, h.target);
-              toast.success(`Focus session complete for "${h.name}"!`);
+              toast.success(`Focus session completed for "${h.name}"!`);
             }
             return 0;
           }
@@ -135,33 +164,81 @@ export default function HabitsPage({
     return () => clearInterval(id);
   }, [isTimerRunning, activeTimerId, timeLeft, habits]);
 
-  const startTimer = (habitId: string, mins: number) => {
-    setActiveTimerId(habitId); setTimeLeft(mins * 60); setIsTimerRunning(true);
+  const startFocusTimer = (habitId: string, minutes: number) => {
+    setActiveTimerId(habitId);
+    setTimeLeft(minutes * 60);
+    setIsTimerRunning(true);
   };
 
-  const standaloneHabits = getStandaloneHabits(habits, routines);
+  // Journey Day calculations (Day X of 90)
+  const journeyStart = localStorage.getItem('journey_start_date') || dateToday;
+  const journeyDiff = Math.abs(new Date(selectedDate).getTime() - new Date(journeyStart).getTime());
+  const currentDayNum = Math.min(90, Math.max(1, Math.ceil(journeyDiff / (1000 * 60 * 60 * 24)) + 1));
 
-  const getCategoryStats = (cat: Category) => {
-    const ch = standaloneHabits.filter(h => h.category === cat);
-    if (!ch.length) return 0;
-    return Math.round(ch.reduce((s, h) =>
-      s + Math.min(100, ((h.history[dateToday]||0)/h.target)*100), 0) / ch.length);
-  };
+  // Streak calculation
+  const currentStreak = useMemo(() => {
+    let streak = 0;
+    const start = new Date(journeyStart);
+    for (let i = 0; i < 90; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      const str = d.toISOString().split('T')[0];
+      if (str === dateToday) continue;
+      const dayHabits = habits.filter(h => isHabitScheduledForDate(h, str));
+      const allDone = dayHabits.length > 0 && dayHabits.every(h => (h.history[str] || 0) >= h.target);
+      if (allDone) streak++;
+      else if (new Date(str) < new Date(dateToday)) streak = 0;
+    }
+    const todayAllDone = habits.length > 0 && habits.every(h => (h.history[dateToday] || 0) >= h.target);
+    if (todayAllDone) streak++;
+    return streak;
+  }, [habits, journeyStart]);
 
-  const filteredHabits = standaloneHabits.filter(h => {
-    if (!isHabitScheduledForDate(h, dateToday)) return false;
-    const done = (h.history[dateToday]||0) >= h.target;
-    return (selectedFilter === 'active' ? !done : done) &&
-      (selectedCategory === 'All' || h.category === selectedCategory);
-  });
+  // Rolling 7-day strip centered on selected date
+  const dateStrip = useMemo(() => {
+    const base = new Date(selectedDate);
+    const days: Array<{ dateStr: string; dayName: string; dayNum: number; isToday: boolean; isSelected: boolean }> = [];
+    for (let offset = -3; offset <= 3; offset++) {
+      const d = new Date(base);
+      d.setDate(base.getDate() + offset);
+      const str = formatDateString(d);
+      const dayName = d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+      const dayNum = d.getDate();
+      days.push({
+        dateStr: str,
+        dayName,
+        dayNum,
+        isToday: str === dateToday,
+        isSelected: str === selectedDate,
+      });
+    }
+    return days;
+  }, [selectedDate]);
 
-  const scheduledToday = standaloneHabits.filter(h => isHabitScheduledForDate(h, dateToday));
-  const remainingCount = scheduledToday.filter(h => (h.history[dateToday]||0) < h.target).length;
+  // Habits scheduled for the selected date
+  const scheduledHabits = useMemo(() => {
+    return habits.filter(h => isHabitScheduledForDate(h, selectedDate));
+  }, [habits, selectedDate]);
 
-  // ── CATEGORY DETAIL VIEW ──────────────────────────────────────────────────
+  const totalTasks = scheduledHabits.length;
+  const completedTasks = scheduledHabits.filter(h => (h.history[selectedDate] || 0) >= h.target).length;
+  const remainingTasks = totalTasks - completedTasks;
+  const lockInPct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+  // Daily Score for selected date
+  const todayScore = useMemo(() => {
+    return scheduledHabits.reduce((acc, h) => {
+      const val = h.history[selectedDate] || 0;
+      if (val >= h.target) return acc + h.points;
+      if (val > 0) return acc + Math.round((val / h.target) * h.points);
+      return acc;
+    }, 0);
+  }, [scheduledHabits, selectedDate]);
+
+  // ── CATEGORY DETAIL VIEW ROUTING ──
   if (selectedCategoryId) {
     return (
-      <div className="max-w-5xl mx-auto py-2 p-4">
+      <div className="max-w-2xl mx-auto py-2 px-4 font-sans">
         <CategoryDetailView
           category={selectedCategoryId}
           habits={habits}
@@ -172,689 +249,415 @@ export default function HabitsPage({
     );
   }
 
-  // ── ROUTINE DETAIL VIEW ───────────────────────────────────────────────────
-  if (selectedRoutineId) {
-    const rt = routines.find(r => r.id === selectedRoutineId);
-    if (!rt) { setSelectedRoutineId(null); return null; }
-    const rh = getRoutineHabits(rt, habits);
-    const doneInRt = rh.filter(h => (h.history[dateToday]||0) >= h.target).length;
-    const allDone = rh.length > 0 && doneInRt === rh.length;
-    const progressPct = rh.length > 0 ? Math.round((doneInRt / rh.length) * 100) : 0;
-
-    // 7-day consistency
-    let consistency7 = 0;
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(); d.setDate(d.getDate() - i);
-      if (rt.completedHistory?.[formatDateString(d)]) consistency7++;
-    }
-
-    const timeBlockColors: Record<string, { bg: string; text: string; border: string; glow: string }> = {
-      Morning: { bg: 'bg-amber-500/10',  text: 'text-amber-300',  border: 'border-amber-500/25',  glow: '#F59E0B' },
-      Evening: { bg: 'bg-orange-500/10', text: 'text-orange-300', border: 'border-orange-500/25', glow: '#F97316' },
-      Night:   { bg: 'bg-indigo-500/10', text: 'text-indigo-300', border: 'border-indigo-500/25', glow: '#6366F1' },
-      Constant:{ bg: 'bg-emerald-500/10',text: 'text-emerald-300',border: 'border-emerald-500/25',glow: '#10B981' },
-    };
-    const tbColor = timeBlockColors[rt.timeBlock] ?? { bg: 'bg-purple-500/10', text: 'text-purple-300', border: 'border-purple-500/25', glow: '#8B5CF6' };
-
-    return (
-      <div className="max-w-3xl mx-auto space-y-5 p-4 md:p-0">
-        {/* Back button */}
-        <button onClick={() => setSelectedRoutineId(null)}
-          className="flex items-center gap-1.5 text-sm font-semibold text-gray-400 hover:text-white transition cursor-pointer group">
-          <ChevronLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" /> Back to Routines
-        </button>
-
-        {/* ── Hero Header ── */}
-        <div className="relative bg-gradient-to-br from-[#13151E] to-[#0E101A] border border-[#222631] rounded-2xl p-6 shadow-2xl overflow-hidden">
-          {/* Ambient glow */}
-          <div className="absolute top-0 right-0 w-40 h-40 rounded-full blur-3xl opacity-20 pointer-events-none"
-            style={{ background: tbColor.glow }} />
-          <div className="absolute bottom-0 left-0 w-24 h-24 rounded-full blur-2xl opacity-10 pointer-events-none"
-            style={{ background: tbColor.glow }} />
-
-          <div className="relative">
-            {/* Time block badge + routine name */}
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1">
-                <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono tracking-widest font-bold ${tbColor.bg} ${tbColor.border} ${tbColor.text} border px-2.5 py-0.5 rounded-full uppercase`}>
-                  <span>{
-                    rt.timeBlock === 'Morning' ? '☀️' :
-                    rt.timeBlock === 'Evening' ? '🌇' :
-                    rt.timeBlock === 'Night'   ? '🌙' : '🔄'
-                  }</span>
-                  {rt.timeBlock} Block
-                </span>
-                <h2 className="text-2xl font-extrabold text-white mt-2 leading-tight">{rt.name}</h2>
-                <p className="text-xs text-gray-500 mt-1 flex items-center gap-2">
-                  <Repeat className="w-3 h-3" />
-                  {rt.repeat} · {rh.length} habit{rh.length !== 1 ? 's' : ''}
-                </p>
-              </div>
-              {/* Right side: Points badge */}
-              <div className="shrink-0 flex flex-col items-end gap-3">
-                <div className="bg-[#FCC419]/10 border border-[#FCC419]/25 rounded-xl px-3 py-2 text-center">
-                  <span className="text-[9px] font-mono text-gray-500 uppercase block">Bonus Award</span>
-                  <span className="text-lg font-black text-[#FCC419] flex items-center gap-1 justify-center">
-                    <Zap className="w-4 h-4 fill-[#FCC419]" /> {rt.points} pts
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Big Progress Arc + Stats */}
-            <div className="mt-5 pt-5 border-t border-[#1C1F2B] grid grid-cols-3 gap-4">
-              <div className="col-span-2">
-                <div className="flex items-baseline gap-2 mb-2">
-                  <span className="text-3xl font-black text-white font-mono">{progressPct}%</span>
-                  <span className="text-xs text-gray-500">today</span>
-                </div>
-                <div className="w-full h-2.5 bg-[#171924] rounded-full overflow-hidden border border-[#1E2130]">
-                  <div
-                    className={`h-full rounded-full transition-all duration-700 ${
-                      allDone
-                        ? 'bg-gradient-to-r from-emerald-400 to-teal-400'
-                        : 'bg-gradient-to-r from-purple-500 to-indigo-500'
-                    }`}
-                    style={{ width: `${progressPct}%` }}
-                  />
-                </div>
-                <p className="text-xs text-gray-500 mt-1.5 font-mono">{doneInRt} of {rh.length} habits complete</p>
-              </div>
-              <div className="text-right">
-                <span className="text-[9px] font-mono text-gray-500 uppercase block mb-1">7-Day Streak</span>
-                <span className="text-2xl font-black text-white font-mono">{consistency7}<span className="text-sm text-gray-500">/7</span></span>
-                <div className="flex gap-1 justify-end mt-1.5">
-                  {Array.from({ length: 7 }, (_, i) => {
-                    const d = new Date(); d.setDate(d.getDate() - (6 - i));
-                    const hit = rt.completedHistory?.[formatDateString(d)];
-                    return (
-                      <div key={i} className={`w-2.5 h-2.5 rounded-sm ${ hit ? 'bg-emerald-400' : 'bg-[#1E2130]' }`} />
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Action Bar ── */}
-        <div className="space-y-2">
-          {/* Primary CTA */}
-          {!allDone && rh.length > 0 && (
-            <button
-              type="button"
-              onClick={() => rh.filter(h => (h.history[dateToday]||0) < h.target).forEach(h => onLogHabit(h.id, Math.max(0, h.target - (h.history[dateToday]||0))))}
-              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-extrabold text-sm px-4 py-3.5 rounded-xl cursor-pointer transition shadow-lg shadow-emerald-500/20 active:scale-[0.95] min-h-[48px]"
-            >
-              <CheckCircle2 className="w-5 h-5" />
-              Complete All Habits
-              <span className="text-[11px] opacity-75 font-mono bg-black/20 px-2 py-0.5 rounded-full">
-                {rh.length - doneInRt} left
-              </span>
-            </button>
-          )}
-          {allDone && rh.length > 0 && (
-            <div className="w-full flex items-center justify-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-extrabold text-sm px-4 py-3.5 rounded-xl min-h-[48px]">
-              <Check className="w-5 h-5 stroke-[3px]" />
-              Routine Complete! 🎉
-            </div>
-          )}
-
-          {/* Secondary Actions */}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => onDeleteRoutine(rt.id)}
-              className="w-full flex items-center justify-center gap-1.5 bg-red-500/8 hover:bg-red-500/15 border border-red-500/25 hover:border-red-500/40 text-red-400 font-bold text-xs px-3 py-2.5 rounded-xl cursor-pointer transition active:scale-95 min-h-[40px]"
-            >
-              <Trash2 className="w-3.5 h-3.5" /> Delete Routine
-            </button>
-          </div>
-        </div>
-
-        {/* ── Habit Steps ── */}
-        <div className="bg-[#12141A] border border-[#222631] rounded-2xl shadow-xl overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-[#1C1F2B]">
-            <div className="flex items-center gap-2">
-              <ListChecks className="w-4 h-4 text-purple-400" />
-              <h3 className="text-sm font-bold text-white">Routine Steps</h3>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-mono text-gray-500 bg-[#1A1D25] border border-[#252A38] px-2.5 py-0.5 rounded-full">
-                {doneInRt}/{rh.length} done
-              </span>
-            </div>
-          </div>
-
-          {rh.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-14 text-center">
-              <div className="w-14 h-14 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mb-4">
-                <Plus className="w-6 h-6 text-purple-400" />
-              </div>
-              <p className="text-sm font-bold text-gray-300">No habits in this routine yet</p>
-              <p className="text-xs text-gray-500 mt-1.5">Open this routine in Quick Habit Logger on the Dashboard to add habits</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-[#1C1F2B]">
-              {rh.map((item, idx) => {
-                const val  = item.history[dateToday] || 0;
-                const pct  = Math.min(100, Math.round((val / item.target) * 100));
-                const done = val >= item.target;
-                const rem  = Math.max(0, item.target - val);
-                const cfg  = getCatConfig(item.category);
-                return (
-                  <div key={item.id} className={`group relative overflow-hidden transition-all duration-200 ${
-                    done ? 'bg-emerald-500/5' : 'hover:bg-[#161922]'
-                  }`}>
-                    {/* Progress fill */}
-                    <div
-                      className={`absolute inset-y-0 left-0 transition-all duration-700 pointer-events-none ${
-                        done ? 'opacity-60' : 'opacity-40'
-                      }`}
-                      style={{
-                        width: `${pct}%`,
-                        background: done
-                          ? 'linear-gradient(90deg, rgba(16,185,129,0.08), transparent)'
-                          : `linear-gradient(90deg, ${cfg.color}10, transparent)`
-                      }}
-                    />
-                    <div className="relative flex items-center gap-3 px-5 py-4">
-                      {/* Step circle */}
-                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 font-black text-xs font-mono transition-all ${
-                        done
-                          ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/25'
-                          : 'bg-[#12141D] border-2 border-[#2E3547] text-gray-500'
-                      }`}>
-                        {done ? <Check className="w-3.5 h-3.5" /> : <span>{idx + 1}</span>}
-                      </div>
-
-                      {/* Info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded font-bold border"
-                            style={{ color: cfg.color, borderColor: `${cfg.color}30`, background: `${cfg.color}12` }}>
-                            {item.category}
-                          </span>
-                          {done ? (
-                            <span className="text-[9px] text-emerald-400 font-bold uppercase bg-emerald-500/10 px-1.5 rounded border border-emerald-500/25">
-                              ✓ Done
-                            </span>
-                          ) : pct > 0 ? (
-                            <span className="text-[9px] text-purple-400 font-mono">{pct}%</span>
-                          ) : null}
-                        </div>
-                        <h4 className={`text-sm font-bold leading-snug ${ done ? 'text-emerald-300 line-through decoration-emerald-500/40' : 'text-white' }`}>
-                          {item.name}
-                        </h4>
-                        {!done && (
-                          <div className="flex items-center gap-2 mt-1.5">
-                            <div className="h-1 bg-[#1E2130] rounded-full overflow-hidden flex-1 max-w-[120px]">
-                              <div className="h-full rounded-full transition-all duration-500"
-                                style={{ width: `${pct}%`, background: cfg.color }} />
-                            </div>
-                            <span className="text-[10px] text-gray-600 font-mono">{rem} {item.unit} left</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Action buttons */}
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {!done ? (
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => onLogHabit(item.id, Math.ceil(item.target / 3))}
-                              className="bg-[#1E2130] hover:bg-[#252A3C] border border-[#2A3040] text-gray-300 text-[11px] font-bold px-2.5 py-1.5 rounded-lg cursor-pointer transition font-mono"
-                            >
-                              +{Math.ceil(item.target / 3)}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onLogHabit(item.id, rem)}
-                              className="bg-emerald-500/12 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[11px] font-bold px-3 py-1.5 rounded-lg cursor-pointer transition whitespace-nowrap"
-                            >
-                              Done ✓
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => onRevertHabit(item.id)}
-                            className="bg-amber-500/10 border border-amber-500/25 text-amber-400 text-[11px] font-bold px-2.5 py-1.5 rounded-lg cursor-pointer transition flex items-center gap-1"
-                          >
-                            <Undo2 className="w-3 h-3" /> Undo
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-
-        </div>
-      </div>
-    );
-  }
-
-  // ── MAIN HABITS PAGE ──────────────────────────────────────────────────────
   return (
-    <div className="space-y-6 max-w-5xl mx-auto p-4 md:p-0">
-
-      {/* Category filter row */}
-      <div className="flex flex-nowrap items-center gap-2 border-b border-[#1A1D24] pb-4 overflow-x-auto scrollbar-hide">
-        {(['All','Fitness','Diet','Career','Recovery','Mind'] as const).map(cat => {
-          const isA = selectedCategory === cat;
-          const prog = cat !== 'All' ? getCategoryStats(cat as Category) : 0;
-          const color = cat !== 'All' ? getCatConfig(cat as Category).color : '#4ecf7f';
-          const emoji = cat !== 'All' ? getCatConfig(cat as Category).emoji : '';
-          return (
-            <button key={cat} onClick={() => setSelectedCategory(cat)}
-              className={`flex-shrink-0 flex items-center space-x-1.5 px-3.5 py-2 rounded-full text-xs font-semibold cursor-pointer transition-all duration-150 ${
-                isA ? 'bg-[#181C24] border border-[#2E3547] text-white shadow-lg'
-                    : 'bg-[#121419]/60 border border-transparent text-gray-400 hover:text-white hover:bg-[#1A1C24]'
-              }`}>
-              {emoji && <span>{emoji}</span>}
-              <span>{cat}</span>
-              {cat !== 'All' && (
-                <span className="text-[10px] font-mono font-bold bg-[#1B1E29] rounded px-1.5 py-0.5"
-                  style={{ color: isA ? color : '#666' }}>{prog}%</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Sub-tab + action buttons */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex space-x-1 bg-[#12141A] border border-[#212431] p-1 rounded-xl w-fit">
-          {(['all','routines'] as const).map(tab => (
-            <button key={tab} onClick={() => setActiveSubTab(tab)}
-              className={`px-4 py-2 text-xs font-bold rounded-lg cursor-pointer transition-all capitalize ${
-                activeSubTab === tab ? 'bg-[#1E212E] text-white border border-[#2F3446]' : 'text-gray-400 hover:text-white'
-              }`}>
-              {tab === 'all' ? 'All habits' : 'Routines'}
-            </button>
-          ))}
+    <div className="space-y-4 max-w-2xl mx-auto font-sans pb-16 px-4 pt-5">
+      {/* ── HEADER ── */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Today</h1>
+          <p className="text-xs font-semibold text-gray-500 mt-0.5">
+            Day {currentDayNum} of 90
+          </p>
         </div>
-        <div className="flex items-center space-x-3">
-          {activeSubTab === 'routines' && (
-            <button onClick={openCreateRoutine}
-              className="flex items-center space-x-1.5 bg-transparent border border-[#12B886]/30 text-[#12B886] font-bold text-xs px-4 py-2.5 rounded-xl cursor-pointer transition hover:bg-[#12B886]/10">
-              <Plus className="w-4 h-4" /><span>Routine</span>
-            </button>
-          )}
-          <button onClick={openCreateHabit}
-            className="flex items-center space-x-1.5 bg-[#12B886] hover:bg-[#0E906B] text-[#0A0D10] font-extrabold text-xs px-4 py-2.5 rounded-xl cursor-pointer transition shadow-lg shadow-emerald-500/15">
-            <Plus className="w-4 h-4 stroke-[3px]" /><span>New habit</span>
+
+        <div className="flex items-center gap-2">
+          {/* Streak pill */}
+          <div className="flex items-center gap-1.5 bg-orange-50/80 border border-orange-200/80 px-3 py-1.5 rounded-full shadow-xs">
+            <Flame className="w-4 h-4 text-orange-500 fill-orange-500" />
+            <span className="text-xs font-black text-orange-700 font-mono">
+              {currentStreak} Streak
+            </span>
+          </div>
+
+          {/* Calendar Jump Button */}
+          <button
+            type="button"
+            onClick={() => setSelectedDate(dateToday)}
+            className="w-10 h-10 rounded-2xl border border-gray-200 bg-white flex items-center justify-center text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition shadow-xs cursor-pointer active:scale-95"
+            title="Reset to today"
+          >
+            <CalendarDays className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {/* Active / Completed filter */}
-      {activeSubTab === 'all' && (
-        <>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex space-x-2.5">
-              {(['active','completed'] as const).map(f => {
-                const isA = selectedFilter === f;
-                const count = f === 'active' ? remainingCount : scheduledToday.length - remainingCount;
-                return (
-                  <button key={f} onClick={() => setSelectedFilter(f)}
-                    className={`flex items-center space-x-2.5 px-4 py-2 rounded-xl font-bold text-sm cursor-pointer transition ${
-                      isA ? 'bg-[#181C25] border border-emerald-500/15 text-white shadow-lg'
-                          : 'bg-[#12141A]/60 border border-transparent text-gray-400 hover:text-white'
-                    }`}>
-                    <span className="capitalize">{f}</span>
-                    <span className={`px-2 py-0.5 rounded-full font-mono text-xs font-extrabold ${
-                      isA ? 'bg-[#12B886]/10 text-[#12B886]' : 'bg-gray-800 text-gray-400'
-                    }`}>{count}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <span className="text-xs font-mono text-gray-500 uppercase tracking-widest">
-              {remainingCount} remaining
+      {/* ── HORIZONTAL WEEK DATE SELECTOR ── */}
+      <div className="flex items-center justify-between gap-1.5 py-1">
+        {dateStrip.map(day => (
+          <button
+            key={day.dateStr}
+            type="button"
+            onClick={() => setSelectedDate(day.dateStr)}
+            className={`flex-1 py-2.5 rounded-2xl flex flex-col items-center justify-center transition-all cursor-pointer select-none active:scale-95 ${
+              day.isSelected
+                ? 'bg-[#10B981] text-white shadow-[0_4px_14px_rgba(16,185,129,0.35)] scale-[1.02]'
+                : 'bg-white border border-gray-200 text-gray-800 hover:border-gray-300'
+            }`}
+          >
+            <span className={`text-[10px] font-black uppercase tracking-wider ${day.isSelected ? 'text-emerald-100' : 'text-gray-500'}`}>
+              {day.dayName}
+            </span>
+            <span className="text-lg font-black mt-0.5 leading-none font-mono">
+              {day.dayNum}
+            </span>
+            {day.isToday && !day.isSelected && (
+              <span className="w-1 h-1 bg-emerald-500 rounded-full mt-1" />
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* ── DAILY LOCK-IN SCORE STATS CARD ── */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
+        <div className="grid grid-cols-4 divide-x divide-gray-100 text-center">
+          <div className="px-2">
+            <span className="text-[9px] font-mono font-extrabold uppercase tracking-wider text-gray-400 block">
+              LOCK-IN
+            </span>
+            <span className="text-xl font-black text-gray-900 mt-1 block">
+              {lockInPct}%
             </span>
           </div>
-          <hr className="border-[#1C1F2B]" />
-        </>
+
+          <div className="px-2">
+            <span className="text-[9px] font-mono font-extrabold uppercase tracking-wider text-gray-400 block">
+              SCORE
+            </span>
+            <span className="text-xl font-black text-emerald-600 mt-1 block font-mono">
+              {todayScore}
+            </span>
+          </div>
+
+          <div className="px-2">
+            <span className="text-[9px] font-mono font-extrabold uppercase tracking-wider text-gray-400 block">
+              LEFT
+            </span>
+            <span className="text-xl font-black text-amber-600 mt-1 block">
+              {remainingTasks} tasks
+            </span>
+          </div>
+
+          <div className="px-2">
+            <span className="text-[9px] font-mono font-extrabold uppercase tracking-wider text-gray-400 block">
+              DONE
+            </span>
+            <span className="text-xl font-black text-blue-600 mt-1 block font-mono">
+              {completedTasks}/{totalTasks}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── VIEW TOGGLE (BY TIME / BY PILLAR) ── */}
+      <div className="flex bg-white border border-gray-200 p-1 rounded-2xl shadow-xs">
+        <button
+          type="button"
+          onClick={() => setViewMode('time')}
+          className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+            viewMode === 'time'
+              ? 'bg-[#10B981] text-white shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          <Clock className="w-3.5 h-3.5" />
+          <span>By Time</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setViewMode('pillar')}
+          className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+            viewMode === 'pillar'
+              ? 'bg-[#10B981] text-white shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          <Target className="w-3.5 h-3.5" />
+          <span>By Pillar</span>
+        </button>
+      </div>
+
+      {/* ── ACTIVE FOCUS TIMER BANNER ── */}
+      {isTimerRunning && activeTimerId && (
+        <div className="bg-emerald-500 text-white rounded-2xl p-4 shadow-lg flex items-center justify-between animate-pulse">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-100">Focus Timer Active</p>
+              <p className="text-sm font-black truncate">
+                {habits.find(h => h.id === activeTimerId)?.name}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-xl font-black">
+              {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsTimerRunning(false)}
+              className="w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center cursor-pointer"
+            >
+              <Pause className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       )}
 
-      {/* ── ALL HABITS GRID ── */}
-      {activeSubTab === 'all' ? (
-        <div className="space-y-8">
-          {(() => {
-            const timeframes = [
-              { id: 'Anytime' as const, label: 'ANYTIME' },
-              { id: 'Morning' as const, label: 'MORNING' },
-              { id: 'Evening' as const, label: 'EVENING' },
-              { id: 'Night'   as const, label: 'NIGHT' },
-            ];
-            const blocks = timeframes.map(tf => {
-              const group = filteredHabits.filter(h => getHabitTimeframeLocal(h, routines) === tf.id);
-              if (!group.length) return null;
-              return (
-                <div key={tf.id} className="space-y-4">
-                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest font-mono select-none">
-                    {tf.label}
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {group.map(item => {
-                      const val  = item.history[dateToday] || 0;
-                      const pct  = Math.min(100, Math.round((val/item.target)*100));
-                      const done = val >= item.target;
-                      const rem  = Math.max(0, item.target - val);
-                      const isExp = expandedHabitId === item.id;
-                      const cfg  = getCatConfig(item.category);
-                      const shortcuts = item.type === 'Timer' ? [10,15,30] : [1,3,5];
+      {/* ── CONTENT SECTION ── */}
+      {viewMode === 'time' ? (
+        /* ──────── BY TIME VIEW ──────── */
+        <div className="space-y-3">
+          {TIME_BLOCKS.map(block => {
+            const blockHabits = scheduledHabits.filter(h => classifyHabitTimeframe(h, routines) === block.id);
+            const isCollapsed = Boolean(collapsedBlocks[block.id]);
+            const blockEstMinutes = blockHabits.reduce((acc, h) => acc + (h.type === 'Timer' ? h.target : 15), 0) || block.defaultMinutes;
 
-                      return (
-                        <div key={item.id}
-                          className="bg-[#12141A] border border-[#222631] rounded-2xl p-5 shadow-lg relative overflow-hidden flex flex-col justify-between hover:border-gray-700/60 transition group border-l-[5px]"
-                          style={{ borderLeftColor: cfg.color }}>
-                          <div className="space-y-3">
-                            {/* Name + menu */}
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex items-center gap-2 min-w-0">
+            return (
+              <div
+                key={block.id}
+                className="bg-white border border-gray-200 rounded-3xl p-5 shadow-xs transition"
+              >
+                {/* Block Header */}
+                <div
+                  onClick={() => toggleBlockCollapse(block.id)}
+                  className="flex items-center justify-between cursor-pointer select-none"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{block.emoji}</span>
+                    <div>
+                      <h2 className="text-base font-black text-gray-900 leading-tight">
+                        {block.label}
+                      </h2>
+                      <p className="text-xs text-gray-400 mt-0.5 font-medium">
+                        {block.hours}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono font-bold text-gray-400">
+                      Est. {blockEstMinutes} min
+                    </span>
+                    <button
+                      type="button"
+                      className="text-gray-400 p-1 rounded-lg hover:bg-gray-100 transition"
+                      aria-label="Toggle collapse"
+                    >
+                      {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Block Content */}
+                {!isCollapsed && (
+                  <div className="mt-4 pt-3 border-t border-gray-100">
+                    {blockHabits.length === 0 ? (
+                      <p className="text-center py-6 text-xs italic text-gray-400">
+                        No active habits or routines scheduled in this block.
+                      </p>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {blockHabits.map(habit => {
+                          const currentVal = habit.history[selectedDate] || 0;
+                          const isCompleted = currentVal >= habit.target;
+                          const isStarred = starredHabits.includes(habit.id);
+                          const pillar = getPillarConfig(habit.category);
+
+                          return (
+                            <div
+                              key={habit.id}
+                              className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                                isCompleted
+                                  ? 'bg-emerald-50/50 border-emerald-200'
+                                  : 'bg-gray-50/60 border-gray-100 hover:border-gray-200'
+                              }`}
+                            >
+                              {/* Left Check Circle Button */}
+                              <button
+                                type="button"
+                                onClick={() => onLogHabit(habit.id, isCompleted ? 0 : habit.target)}
+                                className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition cursor-pointer active:scale-90 ${
+                                  isCompleted
+                                    ? 'bg-[#10B981] text-white shadow-sm'
+                                    : 'border-2 border-gray-300 hover:border-emerald-500 bg-white'
+                                }`}
+                                aria-label={isCompleted ? 'Mark incomplete' : 'Mark completed'}
+                              >
+                                {isCompleted && <Check className="w-4 h-4 stroke-[3px]" />}
+                              </button>
+
+                              {/* Habit Name & Metadata */}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <h3
+                                    className={`text-sm font-black truncate ${
+                                      isCompleted ? 'line-through text-gray-400' : 'text-gray-900'
+                                    }`}
+                                  >
+                                    {habit.name}
+                                  </h3>
+                                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${pillar.bg} ${pillar.text}`}>
+                                    {habit.category}
+                                  </span>
+                                </div>
+                                <div className="text-[11px] font-mono text-gray-400 mt-0.5">
+                                  {currentVal} / {habit.target} {habit.unit}
+                                </div>
+                              </div>
+
+                              {/* Right Actions */}
+                              <div className="flex items-center gap-2 shrink-0">
+                                {/* Star Habit for Home Focus */}
                                 <button
                                   type="button"
-                                  onClick={() => toggleStarHabit(item.id)}
-                                  className={`transition cursor-pointer ${starredHabits.includes(item.id) ? 'text-amber-400' : 'text-gray-600 hover:text-gray-400'}`}
-                                  title="Pin to Today Focus"
+                                  onClick={() => toggleStarHabit(habit.id)}
+                                  className={`p-1.5 rounded-lg transition cursor-pointer ${
+                                    isStarred ? 'text-amber-400' : 'text-gray-300 hover:text-amber-300'
+                                  }`}
+                                  title={isStarred ? 'Unpin from Today Focus' : 'Pin to Today Focus'}
                                 >
-                                  <Star className={`w-4 h-4 ${starredHabits.includes(item.id) ? 'fill-amber-400' : ''}`} />
+                                  <Star className={`w-4 h-4 ${isStarred ? 'fill-amber-400' : ''}`} />
                                 </button>
-                                <span style={{ fontSize: 18 }} className="select-none">{cfg.emoji}</span>
-                                <h4 className="text-base font-extrabold text-white tracking-tight leading-tight truncate">
-                                  {item.name}
-                                </h4>
-                              </div>
-                              <div className="relative shrink-0">
-                                <button type="button"
-                                  onClick={() => { setMenuOpenId(menuOpenId === item.id ? null : item.id); setExpandedHabitId(null); }}
-                                  className={`text-gray-500 group-hover:text-gray-300 p-1.5 rounded-lg hover:bg-[#1C1F2B] transition min-h-[32px] min-w-[32px] flex items-center justify-center ${menuOpenId === item.id ? 'bg-gray-800 text-white' : ''}`}>
-                                  <MoreVertical className="w-4 h-4" />
-                                </button>
-                                {menuOpenId === item.id && (
-                                  <>
-                                    <div className="fixed inset-0 z-40" onClick={() => setMenuOpenId(null)} />
-                                    <div className="absolute right-0 top-full mt-1 w-44 bg-[#1A1D27] border border-[#2A3040] rounded-xl shadow-2xl z-50 overflow-hidden py-1">
-                                      <button type="button" onClick={() => { setMenuOpenId(null); onEditHabit(item); }}
-                                        className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-gray-300 hover:bg-[#242938] hover:text-white transition cursor-pointer">
-                                        <Pencil className="w-3.5 h-3.5 text-purple-400" /> Edit Habit
-                                      </button>
-                                      {item.enableFocusTimer && (
-                                        <button type="button" onClick={() => { setMenuOpenId(null); setExpandedHabitId(isExp ? null : item.id); }}
-                                          className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-gray-300 hover:bg-[#242938] hover:text-white transition cursor-pointer">
-                                          <Clock className="w-3.5 h-3.5 text-[#12B886]" /> Focus Timer
-                                        </button>
-                                      )}
-                                      {done && (
-                                        <button type="button" onClick={() => { setMenuOpenId(null); onRevertHabit(item.id); }}
-                                          className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-amber-400 hover:bg-amber-500/10 transition cursor-pointer">
-                                          <Undo2 className="w-3.5 h-3.5" /> Revert to Active
-                                        </button>
-                                      )}
-                                      <button type="button" onClick={() => { setMenuOpenId(null); onDeleteHabit(item.id); }}
-                                        disabled={!!deletingHabitId}
-                                        className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-red-400 hover:bg-red-500/10 transition cursor-pointer disabled:opacity-50">
-                                        {deletingHabitId === item.id ? <RotateCcw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                                        Delete Habit
-                                      </button>
-                                    </div>
-                                  </>
+
+                                {/* Timer action if timer habit */}
+                                {habit.type === 'Timer' && !isCompleted && (
+                                  <button
+                                    type="button"
+                                    onClick={() => startFocusTimer(habit.id, habit.target)}
+                                    className="px-2.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <Play className="w-3 h-3 fill-purple-600" />
+                                    <span>Start</span>
+                                  </button>
+                                )}
+
+                                {/* Increment Button */}
+                                {!isCompleted && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onLogHabit(habit.id, habit.type === 'Timer' ? 5 : 1)}
+                                    className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-extrabold transition cursor-pointer active:scale-95"
+                                  >
+                                    {habit.type === 'Timer' ? '+5m' : '+1'}
+                                  </button>
                                 )}
                               </div>
                             </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* ──────── BY PILLAR VIEW ──────── */
+        <div className="space-y-3">
+          {(['Fitness', 'Diet', 'Career', 'Recovery', 'Mind'] as Category[]).map(cat => {
+            const pillarHabits = scheduledHabits.filter(h => h.category === cat);
+            const total = pillarHabits.length;
+            const done = pillarHabits.filter(h => (h.history[selectedDate] || 0) >= h.target).length;
+            const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+            const pillar = getPillarConfig(cat);
+            const Icon = pillar.icon;
 
-                            {/* Badges */}
-                            <div className="flex flex-wrap items-center gap-1.5 text-[9px] font-mono font-bold select-none">
-                              <span className="tracking-widest uppercase px-1.5 py-0.5 border rounded"
-                                style={{ color: cfg.color, borderColor: `${cfg.color}25`, background: `${cfg.color}08` }}>
-                                {item.category}
-                              </span>
-                              <span className="flex items-center px-1.5 py-0.5 border border-[#FCC419]/25 bg-[#FCC419]/05 text-[#FCC419] rounded">
-                                <Zap className="w-3 h-3 mr-0.5 fill-[#FCC419]" />{item.routineId ? 0 : item.points}
-                              </span>
-                              <span className="flex items-center px-1.5 py-0.5 border border-gray-800 bg-gray-900/10 text-gray-500 rounded">
-                                <Clock className="w-3 h-3 mr-0.5" />{item.timeOfDay || 'Anytime'}
-                              </span>
-                              <span className="flex items-center px-1.5 py-0.5 border border-gray-800 bg-gray-900/10 text-gray-500 rounded">
-                                <Repeat className="w-3 h-3 mr-0.5" />{item.repeat === 'Daily' ? 'daily' : item.repeat.toLowerCase()}
-                              </span>
-                            </div>
+            return (
+              <div
+                key={cat}
+                className="bg-white border border-gray-200 rounded-3xl p-5 shadow-xs"
+              >
+                {/* Pillar Header */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${pillar.bg}`}>
+                      <Icon className="w-5 h-5" style={{ color: pillar.color }} />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-black text-gray-900">{cat}</h2>
+                      <p className="text-xs text-gray-400 font-mono">
+                        {done} of {total} completed
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-sm font-black font-mono text-gray-700">
+                    {pct}%
+                  </span>
+                </div>
 
-                            {/* Progress */}
-                            <div className="flex justify-between items-center text-xs font-bold mt-4 select-none">
-                              <span style={{ color: cfg.color }}>{pct}%</span>
-                              <span className="text-gray-500 font-mono">{rem} {item.unit} left</span>
-                            </div>
-                            <div className="w-full h-1 bg-[#171924]/90 border border-[#212431]/80 rounded-full overflow-hidden">
-                              <div className="h-full transition-all duration-300 rounded-full"
-                                style={{ width: `${pct}%`, backgroundColor: cfg.color, boxShadow: `0 0 6px ${cfg.color}88` }} />
-                            </div>
+                {/* Progress bar */}
+                <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden mb-4">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${pct}%`, backgroundColor: pillar.color }}
+                  />
+                </div>
 
-                            {/* Shortcut buttons */}
-                            <div className="flex gap-2 pt-1 select-none">
-                              {shortcuts.map(val => (
-                                <button key={val} onClick={() => onLogHabit(item.id, val)}
-                                  className="border border-[#12B886]/15 bg-[#12B886]/03 text-[#12B886] hover:bg-[#12B886]/10 py-3 min-h-[44px] rounded-xl flex-1 text-xs font-extrabold cursor-pointer transition font-mono text-center active:scale-95">
-                                  +{val}{item.type === 'Timer' ? 'm' : ''}
-                                </button>
-                              ))}
-                            </div>
+                {/* Habit items */}
+                {pillarHabits.length === 0 ? (
+                  <p className="text-center py-4 text-xs italic text-gray-400">
+                    No active habits under this pillar.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {pillarHabits.map(habit => {
+                      const currentVal = habit.history[selectedDate] || 0;
+                      const isCompleted = currentVal >= habit.target;
+
+                      return (
+                        <div
+                          key={habit.id}
+                          className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                            isCompleted
+                              ? 'bg-emerald-50/50 border-emerald-200'
+                              : 'bg-gray-50/60 border-gray-100'
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => onLogHabit(habit.id, isCompleted ? 0 : habit.target)}
+                            className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition cursor-pointer active:scale-90 ${
+                              isCompleted
+                                ? 'bg-[#10B981] text-white'
+                                : 'border-2 border-gray-300 hover:border-emerald-500 bg-white'
+                            }`}
+                          >
+                            {isCompleted && <Check className="w-3.5 h-3.5 stroke-[3px]" />}
+                          </button>
+
+                          <div className="flex-1 min-w-0">
+                            <h3 className={`text-sm font-black truncate ${isCompleted ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+                              {habit.name}
+                            </h3>
+                            <p className="text-[10px] font-mono text-gray-400">
+                              {currentVal}/{habit.target} {habit.unit}
+                            </p>
                           </div>
 
-                          {/* Complete / Revert */}
-                          <div className="mt-3">
-                            {done ? (
-                              <div className="space-y-2">
-                                <div className="w-full bg-[#12B886]/10 border border-[#12B886]/30 text-[#12B886] py-3 min-h-[44px] px-3 rounded-xl text-xs font-bold text-center flex items-center justify-center space-x-1.5 select-none">
-                                  <Check className="w-4 h-4 stroke-[3px]" /><span>Done for Today!</span>
-                                </div>
-                                <button type="button" onClick={() => onRevertHabit(item.id)}
-                                  className="w-full bg-amber-500/10 hover:bg-amber-500/15 border border-amber-500/25 text-amber-400 py-2.5 min-h-[40px] px-3 rounded-xl text-xs font-bold cursor-pointer transition flex items-center justify-center gap-1.5 active:scale-95">
-                                  <Undo2 className="w-3.5 h-3.5" /> Revert to Active
-                                </button>
-                              </div>
-                            ) : (
-                              <button type="button" onClick={() => onLogHabit(item.id, rem)}
-                                className="w-full bg-[#12b886]/10 hover:bg-[#12b886]/20 border border-[#12b886]/30 hover:border-[#12b886]/50 text-[#12b886] py-3 min-h-[44px] px-3 rounded-xl text-xs font-extrabold cursor-pointer transition text-center flex items-center justify-center space-x-1.5 select-none active:scale-95">
-                                <Check className="w-4 h-4 stroke-[3px]" />
-                                <span>Complete Habit</span>
-                                <span className="text-[10px] font-mono opacity-80">(+{rem} {item.unit})</span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {!isCompleted && (
+                              <button
+                                type="button"
+                                onClick={() => onLogHabit(habit.id, habit.type === 'Timer' ? 5 : 1)}
+                                className="px-3 py-1.5 bg-gray-900 text-white rounded-xl text-xs font-black transition cursor-pointer active:scale-95"
+                              >
+                                {habit.type === 'Timer' ? '+5m' : '+1'}
                               </button>
                             )}
                           </div>
-
-                          {/* Focus timer panel */}
-                          {isExp && item.enableFocusTimer && (
-                            <div className="mt-3 pt-3 border-t border-[#1C1F2B]/80 space-y-3">
-                              <div className="bg-[#181C26] border border-[#242A3A] rounded-xl p-2 flex items-center justify-between">
-                                <div className="flex items-center space-x-2">
-                                  <div className="p-1 px-2 rounded bg-[#12B886]/10 text-[#12B886] font-mono text-xs font-bold">
-                                    {activeTimerId === item.id
-                                      ? `${Math.floor(timeLeft/60)}:${String(timeLeft%60).padStart(2,'0')}`
-                                      : `${item.target}m`}
-                                  </div>
-                                  <span className="text-[9px] font-mono text-gray-500 uppercase">Focus Timer</span>
-                                </div>
-                                <div className="flex items-center space-x-1.5">
-                                  {activeTimerId === item.id && isTimerRunning ? (
-                                    <button type="button" onClick={() => setIsTimerRunning(false)}
-                                      className="bg-yellow-500/15 border border-yellow-500/30 text-yellow-500 p-1 rounded">
-                                      <Pause className="w-3 h-3" />
-                                    </button>
-                                  ) : (
-                                    <button type="button" onClick={() => startTimer(item.id, item.target)}
-                                      className="bg-[#12B886]/10 border border-[#12B886]/30 text-[#12B886] p-1 rounded">
-                                      <Play className="w-3 h-3 fill-current" />
-                                    </button>
-                                  )}
-                                  <button type="button"
-                                    onClick={() => { setActiveTimerId(null); setIsTimerRunning(false); setTimeLeft(0); }}
-                                    className="bg-gray-800 border border-gray-700 text-gray-400 p-1 rounded">
-                                    <RotateCcw className="w-3 h-3" />
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          )}
                         </div>
                       );
                     })}
                   </div>
-                </div>
-              );
-            });
-
-            const any = blocks.some(b => b !== null);
-            if (!scheduledToday.length) return (
-              <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
-                <div className="w-16 h-16 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center justify-center mb-5">
-                  <Sparkles className="w-8 h-8 text-emerald-400" />
-                </div>
-                <h3 className="text-xl font-bold text-white">No Habits Scheduled Today</h3>
-                <p className="text-sm text-gray-500 mt-2 max-w-xs leading-relaxed">
-                  Create your first habit to start tracking progress and earning points.
-                </p>
-                <button onClick={openCreateHabit}
-                  className="mt-6 flex items-center space-x-2 bg-[#12B886] hover:bg-[#0E906B] text-[#0A0D10] font-extrabold text-sm px-5 py-2.5 rounded-xl cursor-pointer transition shadow-lg shadow-emerald-500/15">
-                  <Plus className="w-4 h-4 stroke-[3px]" /><span>Create Your First Habit</span>
-                </button>
+                )}
               </div>
             );
-            return any ? blocks : (
-              <div className="h-64 bg-[#121419]/70 border border-dashed border-[#222631] text-center p-12 rounded-2xl flex flex-col items-center justify-center">
-                <span className="text-3xl">🧘</span>
-                <h3 className="text-base font-bold text-white mt-3">All habits filtered out</h3>
-                <p className="text-xs text-gray-500 mt-1">Adjust your filter or create a new habit.</p>
-              </div>
-            );
-          })()}
-        </div>
-      ) : (
-        /* ── ROUTINES GRID ── */
-        <div className="space-y-4">
-          {!routines.length ? (
-            <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
-              <div className="w-16 h-16 bg-purple-500/10 border border-purple-500/20 rounded-2xl flex items-center justify-center mb-5">
-                <CalendarDays className="w-8 h-8 text-purple-400" />
-              </div>
-              <h3 className="text-xl font-bold text-white">No Routines Yet</h3>
-              <p className="text-sm text-gray-500 mt-2 max-w-xs leading-relaxed">
-                Group habits into a routine to earn bonus XP when you complete them all.
-              </p>
-              <button onClick={openCreateRoutine}
-                className="mt-6 flex items-center space-x-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-300 font-bold text-sm px-5 py-2.5 rounded-xl cursor-pointer transition">
-                <Plus className="w-4 h-4" /><span>Create Your First Routine</span>
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {routines.map(rt => {
-                const rh   = getRoutineHabits(rt, habits).filter(h => isHabitScheduledForDate(h, dateToday));
-                const done = rh.filter(h => (h.history[dateToday]||0) >= h.target).length;
-                const pct  = rh.length > 0 ? Math.round((done/rh.length)*100) : 0;
-                const allDone = rh.length > 0 && done === rh.length;
-                const domCat = getRoutineDomCategory(rt, habits);
-                const cfg = getCatConfig(domCat);
-                const IconComp = cfg.icon;
-                const pillarColor = cfg.color;
-                const timeBlockEmoji = rt.timeBlock === 'Morning' ? '☀️' : rt.timeBlock === 'Evening' ? '🌇' : rt.timeBlock === 'Night' ? '🌙' : '🔄';
-                return (
-                  <div
-                    key={rt.id}
-                    className="group relative bg-[#12141A] hover:bg-[#171A26] border rounded-2xl shadow-lg overflow-hidden transition-all duration-200 flex flex-col"
-                    style={{ borderColor: allDone ? 'rgba(18,184,134,0.3)' : `${pillarColor}22` }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = allDone ? 'rgba(18,184,134,0.5)' : `${pillarColor}55`; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = allDone ? 'rgba(18,184,134,0.3)' : `${pillarColor}22`; }}
-                  >
-                    {/* Color accent strip */}
-                    <div className="h-1 w-full" style={{ background: `linear-gradient(90deg, ${pillarColor}, ${pillarColor}44)` }} />
-
-                    {/* Card Body (clickable area) */}
-                    <div
-                      onClick={() => setSelectedRoutineId(rt.id)}
-                      className="flex-1 p-4 cursor-pointer"
-                    >
-                      {/* Header row */}
-                      <div className="flex items-start justify-between gap-2 mb-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="h-10 w-10 rounded-xl flex items-center justify-center border shrink-0"
-                            style={{ backgroundColor: `${pillarColor}14`, borderColor: `${pillarColor}28`, color: pillarColor }}>
-                            <IconComp className="w-4.5 h-4.5" />
-                          </div>
-                          <div>
-                            <h3 className="text-sm font-bold text-white leading-tight">{rt.name}</h3>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border font-bold uppercase"
-                                style={{ color: pillarColor, borderColor: `${pillarColor}30`, background: `${pillarColor}12` }}>
-                                {domCat}
-                              </span>
-                              <span className="text-[9px] text-gray-500 font-mono">{timeBlockEmoji} {rt.timeBlock}</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="shrink-0 text-right">
-                          <div className="text-xs font-bold font-mono text-[#FCC419] flex items-center gap-0.5 justify-end">
-                            <Zap className="w-3 h-3 fill-[#FCC419]" /> {rt.points}
-                          </div>
-                          <div className="text-[9px] text-gray-500 font-mono">bonus pts</div>
-                        </div>
-                      </div>
-
-                      {/* Stats */}
-                      <p className="text-[11px] text-gray-500 mb-2.5 font-mono">
-                        {allDone ? '✅ Complete!' : `${done} of ${rh.length} done today`}
-                        {rh.length === 0 && ' · No habits yet'}
-                      </p>
-
-                      {/* Progress Bar */}
-                      <div>
-                        <div className="flex justify-between items-baseline text-[10px] mb-1 font-mono">
-                          <span style={{ color: pillarColor }}>{pct}%</span>
-                          <span className="text-gray-600">{done}/{rh.length}</span>
-                        </div>
-                        <div className="w-full h-2 bg-[#0E1018] rounded-full overflow-hidden border border-[#1E2130]">
-                          <div
-                            className="h-full rounded-full transition-all duration-500"
-                            style={{
-                              width: `${pct}%`,
-                              background: allDone ? 'linear-gradient(90deg, #12B886, #06B6D4)' : pillarColor,
-                              boxShadow: pct > 0 ? `0 0 8px ${pillarColor}66` : 'none',
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Action Footer */}
-                    <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-[#1C1F2B] bg-[#0E1016]/60">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedRoutineId(rt.id)}
-                        className="flex items-center gap-1.5 text-[11px] font-bold text-gray-400 hover:text-white transition cursor-pointer"
-                      >
-                        <ListChecks className="w-3.5 h-3.5" /> View Steps
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); onDeleteRoutine(rt.id); }}
-                        className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition cursor-pointer"
-                        title="Delete routine"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          })}
         </div>
       )}
     </div>

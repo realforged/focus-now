@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Bell,
   BookOpen,
@@ -473,192 +473,128 @@ export default function Dashboard({
         </div>
       </div>
 
-      {/* QUICK HABIT LOGGER */}
-      <div className="bg-[#121420] border border-[#23283A] rounded-2xl p-5 shadow-xl space-y-4 overflow-hidden relative">
-        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-400 via-cyan-400 to-indigo-400" />
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-7 h-7 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
-              <CircleCheck className="w-4 h-4 text-emerald-400" />
+      {/* ── QUICK HABIT LOGGER (DAILY DISCIPLINES) ── */}
+      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
+              <CheckCircle2 className="w-4 h-4" />
             </div>
-            <div className="min-w-0">
-              <h3 className="text-lg font-black text-white leading-tight">Quick Habit Logger</h3>
-              <div className="mt-1 flex items-center gap-2 text-[10px] font-mono text-gray-500 uppercase">
-                <span className="inline-flex items-center gap-1 rounded-full border border-[#2A3042] bg-[#191C2A] px-2 py-0.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> auto
-                </span>
-                <span className="text-emerald-400 font-bold">{remainingCount} remaining</span>
-              </div>
+            <div>
+              <h3 className="text-base font-black text-gray-900 leading-tight">Daily Disciplines</h3>
+              <p className="text-[11px] text-gray-400 font-semibold mt-0.5">
+                {filteredHabits.filter(h => (h.history[dateToday] || 0) >= h.target).length} of {filteredHabits.length} completed
+              </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              const next = filteredHabits.find(h => (h.history[dateToday] || 0) < h.target);
-              if (next) onLogHabit(next.id, next.type === 'Timer' ? 5 : 1);
-            }}
-            disabled={!filteredHabits.some(h => (h.history[dateToday] || 0) < h.target)}
-            className="w-14 rounded-xl bg-[#202437] border border-[#2D3348] px-2 py-2 text-center text-[10px] font-black text-gray-300 uppercase tracking-widest disabled:opacity-40 active:scale-95 transition cursor-pointer"
-          >
-            <Zap className="w-3.5 h-3.5 text-orange-400 fill-orange-400 mx-auto mb-1" />
-            1-Tap
-          </button>
-        </div>
 
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {(['All', 'Morning', 'Evening', 'Night'] as const).map(tf => {
-            const count = tf === 'All' ? quickHabits.length : quickHabits.filter(h => {
-              const block = getHabitTimeframe(h);
-              return block === tf || block === 'Anytime';
-            }).length;
-            return (
+          {/* Timeframe Filter Pills */}
+          <div className="flex bg-gray-100 p-1 rounded-xl gap-1">
+            {(['All', 'Morning', 'Evening', 'Night'] as const).map(tf => (
               <button
                 key={tf}
+                type="button"
                 onClick={() => setTimeframeFilter(tf)}
-                className={
-                  'h-10 shrink-0 rounded-full border px-4 text-xs font-extrabold transition cursor-pointer ' +
-                  (timeframeFilter === tf
-                    ? 'bg-emerald-500 text-white border-emerald-400 shadow-lg shadow-emerald-500/20'
-                    : 'bg-[#171A28] text-gray-400 border-[#252B3D] hover:text-white')
-                }
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition cursor-pointer ${
+                  timeframeFilter === tf
+                    ? 'bg-white text-gray-900 shadow-xs'
+                    : 'text-gray-500 hover:text-gray-800'
+                }`}
               >
-                {tf} <span className="ml-1 rounded-lg bg-black/15 px-1.5 font-mono">{count}</span>
+                {tf}
               </button>
-            );
-          })}
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 rounded-xl border border-[#23283A] bg-[#171A28] p-3">
-          <div>
-            <div className="text-[9px] font-mono font-bold uppercase tracking-widest text-gray-500">Yesterday</div>
-            <div className="mt-2 flex items-center gap-2">
-              <div className="h-1.5 flex-1 rounded-full bg-[#2A3040] overflow-hidden">
-                <div className="h-full rounded-full bg-gray-500" style={{ width: `{yesterdayLoggerPct}%` }} />
-              </div>
-              <span className="w-8 text-right text-[10px] font-mono text-gray-500">{yesterdayLoggerPct}%</span>
-            </div>
-          </div>
-          <div>
-            <div className="flex items-center justify-between text-[9px] font-mono font-bold uppercase tracking-widest">
-              <span className="text-emerald-400">Today</span>
-              <span className={aheadDelta >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
-                {aheadDelta >= 0 ? '+' : ''}{aheadDelta}%
-              </span>
-            </div>
-            <div className="mt-2 flex items-center gap-2">
-              <div className="h-1.5 flex-1 rounded-full bg-[#2A3040] overflow-hidden">
-                <div className="h-full rounded-full bg-emerald-400" style={{ width: `{todayLoggerPct}%` }} />
-              </div>
-              <span className="w-8 text-right text-[10px] font-mono text-emerald-400">{todayLoggerPct}%</span>
-            </div>
+            ))}
           </div>
         </div>
 
-        {routineSpotlight && (
-          <button
-            type="button"
-            onClick={() => onNavigateToRoutine(routineSpotlight.routine.id)}
-            className="w-full rounded-xl border border-cyan-500/15 bg-cyan-500/5 p-3 text-left transition hover:border-cyan-400/30 cursor-pointer"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="h-11 w-11 rounded-full border border-cyan-500/20 bg-cyan-500/10 flex items-center justify-center shrink-0">
-                  <Moon className="w-5 h-5 text-cyan-300" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-black text-white truncate">{routineSpotlight.routine.name}</div>
-                  <div className="mt-1 text-[10px] font-mono uppercase text-cyan-300">{routineSpotlight.routine.timeBlock} routine</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="rounded-lg border border-amber-400/20 bg-amber-400/10 px-2 py-1 text-xs font-black text-amber-300">+{routineSpotlight.routine.points}XP</span>
-                <ChevronRight className="w-4 h-4 text-gray-500" />
-              </div>
-            </div>
-            <div className="mt-3 flex items-center gap-2">
-              <div className="h-1.5 flex-1 rounded-full bg-[#23283A] overflow-hidden">
-                <div className="h-full rounded-full bg-cyan-300" style={{ width: `{routineSpotlight.pct}%` }} />
-              </div>
-              <span className="text-[10px] font-mono text-cyan-300">{routineSpotlight.done}/{routineSpotlight.total}</span>
-            </div>
-          </button>
-        )}
-
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-[10px] font-mono font-bold uppercase tracking-widest text-gray-500">
-            <span>Individual Habits</span>
-            <span>Tap to complete</span>
+        {/* Habit List */}
+        {filteredHabits.length === 0 ? (
+          <div className="text-center py-6 text-xs text-gray-400 font-medium">
+            No habits active in this block today.
           </div>
-          {filteredHabits.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-[#2A3042] py-8 text-center text-xs font-semibold text-gray-500">
-              No habits active in this block today.
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {filteredHabits.map((habit) => {
-                const currentVal = habit.history[dateToday] || 0;
-                const isCompleted = currentVal >= habit.target;
-                const isStarred = starredHabits.includes(habit.id);
-                const pct = Math.min(100, Math.round((currentVal / habit.target) * 100));
-                const color = getCategoryColor(habit.category);
-                const tint = getCategoryTint(habit.category);
-                const Icon = habit.category === 'Mind' ? BookOpen : getCategoryIcon(habit.category);
-                return (
-                  <div
-                    key={habit.id}
-                    className={
-                      'relative overflow-hidden rounded-2xl border p-3.5 transition ' +
-                      (isCompleted ? 'border-emerald-400/30 bg-emerald-400/10' : 'border-[#23283A] bg-[#151824] hover:border-[#32384C]')
-                    }
+        ) : (
+          <div className="space-y-2.5">
+            {filteredHabits.map((habit) => {
+              const currentVal = habit.history[dateToday] || 0;
+              const isCompleted = currentVal >= habit.target;
+              const isStarred = starredHabits.includes(habit.id);
+              const color = getCategoryColor(habit.category);
+              const tint = getCategoryTint(habit.category);
+
+              return (
+                <div
+                  key={habit.id}
+                  className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                    isCompleted
+                      ? 'bg-emerald-50/50 border-emerald-200'
+                      : 'bg-gray-50/60 border-gray-100 hover:border-gray-200'
+                  }`}
+                >
+                  {/* Left Circle Checkmark Target */}
+                  <button
+                    type="button"
+                    onClick={() => onLogHabit(habit.id, isCompleted ? 0 : habit.target)}
+                    className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition cursor-pointer active:scale-90 ${
+                      isCompleted
+                        ? 'bg-[#10B981] text-white shadow-sm'
+                        : 'border-2 border-gray-300 hover:border-emerald-500 bg-white'
+                    }`}
+                    aria-label={isCompleted ? 'Mark incomplete' : 'Mark complete'}
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <button
-                          type="button"
-                          onClick={() => toggleStarHabit(habit.id)}
-                          className={'shrink-0 transition cursor-pointer ' + (isStarred ? 'text-amber-300' : 'text-gray-600 hover:text-amber-300')}
-                          title="Pin to focus"
-                        >
-                          <Star className={'w-4 h-4 ' + (isStarred ? 'fill-amber-300' : '')} />
-                        </button>
-                        <div className="h-11 w-11 rounded-full border flex items-center justify-center shrink-0" style={{ backgroundColor: `{color}18`, borderColor: `{color}30` }}>
-                          <Icon className="w-5 h-5" style={{ color }} />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-sm font-black text-white truncate">{habit.name}</div>
-                          <div className="mt-1 flex items-center gap-2 text-[10px] font-mono">
-                            <span className="rounded-md px-1.5 py-0.5 font-bold" style={{ backgroundColor: tint, color }}>{habit.category}</span>
-                            <span className="text-gray-500">{currentVal}/{habit.target} {habit.unit}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={isCompleted}
-                        onClick={() => onLogHabit(habit.id, habit.type === 'Timer' ? 5 : 1)}
-                        className={
-                          'h-11 w-11 rounded-full border flex items-center justify-center shrink-0 transition active:scale-95 cursor-pointer ' +
-                          (isCompleted
-                            ? 'bg-emerald-400/10 border-emerald-400/20 text-emerald-300'
-                            : 'bg-[#1D2232] border-[#30364A] text-gray-300 hover:text-white')
-                        }
-                        title={isCompleted ? 'Done' : 'Log progress'}
+                    {isCompleted && <Check className="w-4 h-4 stroke-[3px]" />}
+                  </button>
+
+                  {/* Habit Details */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h4
+                        className={`text-sm font-black truncate ${
+                          isCompleted ? 'line-through text-gray-400' : 'text-gray-900'
+                        }`}
                       >
-                        {isCompleted ? <Check className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
-                      </button>
+                        {habit.name}
+                      </h4>
+                      <span
+                        className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase"
+                        style={{ backgroundColor: tint, color }}
+                      >
+                        {habit.category}
+                      </span>
                     </div>
-                    <div className="mt-3 flex items-center gap-2">
-                      <div className="h-1.5 flex-1 rounded-full bg-[#242A3A] overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `{pct}%`, backgroundColor: isCompleted ? '#12B886' : color }} />
-                      </div>
-                      <span className="w-9 text-right text-[10px] font-mono font-bold text-gray-500">{pct}%</span>
+                    <div className="text-[11px] font-mono text-gray-400 mt-0.5">
+                      {currentVal} / {habit.target} {habit.unit}
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+
+                  {/* Right Actions */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => toggleStarHabit(habit.id)}
+                      className={`p-1.5 rounded-lg transition cursor-pointer ${
+                        isStarred ? 'text-amber-400' : 'text-gray-300 hover:text-amber-300'
+                      }`}
+                      title="Pin to focus"
+                    >
+                      <Star className={`w-4 h-4 ${isStarred ? 'fill-amber-400' : ''}`} />
+                    </button>
+
+                    {!isCompleted && (
+                      <button
+                        type="button"
+                        onClick={() => onLogHabit(habit.id, habit.type === 'Timer' ? 5 : 1)}
+                        className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-extrabold transition cursor-pointer active:scale-95"
+                      >
+                        {habit.type === 'Timer' ? '+5m' : '+1'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* PILLAR OVERVIEW */}
