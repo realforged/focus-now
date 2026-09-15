@@ -1,5 +1,5 @@
 import { Habit, Routine, Category, SubHabit } from './types';
-import { supabase } from './supabase';
+import { supabase, isSupabaseConfigured } from './supabase';
 import { mapLegacyCategory, dateToday } from './data';
 
 export class ApiError extends Error {
@@ -243,7 +243,7 @@ function saveLocalRoutines(userId: string, routines: Routine[]): void {
 }
 
 // Track whether remote Supabase has proven unreachable to avoid repeated lag
-let supabaseKnownOffline = false;
+let supabaseKnownOffline = !isSupabaseConfigured;
 
 // Routine helpers for remote Supabase
 async function appendHabitToRoutine(routineId: string, habitId: string): Promise<void> {
@@ -471,11 +471,29 @@ export const api = {
     return { token, user: profile };
   },
 
+  getCurrentSession() {
+    return getLocalSession();
+  },
+
+  setLocalSessionSync(session: LocalSession) {
+    setLocalSession(session);
+  },
+
   async getProfile() {
+    const session = getLocalSession();
+    // In local mode or if using a local token, immediately use local profile
+    if (!isSupabaseConfigured || supabaseKnownOffline || session?.token?.startsWith('local_token_')) {
+      const userId = session?.id || 'guest_user';
+      return getLocalProfile(userId, session?.email || 'charan@focusnow.app');
+    }
+
     if (!supabaseKnownOffline) {
       try {
         const { data: userAuth, error: authError } = await supabase.auth.getUser();
         if (authError || !userAuth?.user) {
+          if (session) {
+            return getLocalProfile(session.id, session.email);
+          }
           if (isNetworkError(authError)) {
             supabaseKnownOffline = true;
           } else {
@@ -506,14 +524,14 @@ export const api = {
         }
       } catch (err: any) {
         if (isNetworkError(err)) supabaseKnownOffline = true;
+        else if (session) return getLocalProfile(session.id, session.email);
         else throw err;
       }
     }
 
     // Local fallback
-    const session = getLocalSession();
     const userId = session?.id || 'guest_user';
-    return getLocalProfile(userId, session?.email);
+    return getLocalProfile(userId, session?.email || 'charan@focusnow.app');
   },
 
   async syncJourney(stats: {

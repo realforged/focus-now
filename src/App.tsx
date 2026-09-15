@@ -74,6 +74,13 @@ function AppInner() {
   // Fetch all user details, habits, routines on mounting/authentication
   const loadAllData = async () => {
     if (!token) {
+      // Try to restore a local session even if habit_mountain_token is gone
+      const localSession = api.getCurrentSession();
+      if (localSession?.token) {
+        localStorage.setItem('habit_mountain_token', localSession.token);
+        setToken(localSession.token);
+        return; // will re-trigger via token dependency
+      }
       setAppLoading(false);
       return;
     }
@@ -98,10 +105,14 @@ function AppInner() {
 
     } catch (err: any) {
       console.error('Error loading full-stack assets:', err);
-      // If unauthorized token, force session clear
+      // Only force logout for Supabase remote tokens (not local ones which never expire)
+      const isLocalToken = token?.startsWith('local_token_');
       if (
-        (err instanceof ApiError && (err.status === 401 || err.status === 403)) ||
-        err.message?.toLowerCase().includes('expired')
+        !isLocalToken &&
+        (
+          (err instanceof ApiError && (err.status === 401 || err.status === 403)) ||
+          err.message?.toLowerCase().includes('expired')
+        )
       ) {
         handleLogout();
       }
