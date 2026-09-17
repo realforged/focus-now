@@ -29,6 +29,7 @@ interface CreateHabitModalProps {
   habitToEdit?: Habit | null;
   routines: Routine[];
   prefilledRoutineId?: string;
+  prefilledTimeBlock?: '' | 'Morning' | 'Afternoon' | 'Evening' | 'Night';
 }
 
 export interface HabitPreset {
@@ -322,7 +323,7 @@ const HABIT_PRESETS: HabitPreset[] = [
     actionStyle: 'check',
     target: 1,
     unit: 'done',
-    timeBlock: 'Night',
+    timeBlock: 'Evening',
     points: 15,
     subHabits: ['Write down 3 concrete wins today', 'Identify 1 lesson or obstacle handled', 'Select tomorrow\'s top 3 priorities'],
     icon: '✍️',
@@ -352,6 +353,7 @@ export function CreateHabitModal({
   habitToEdit,
   routines,
   prefilledRoutineId,
+  prefilledTimeBlock,
 }: CreateHabitModalProps) {
   const [modalTab, setModalTab] = useState<'presets' | 'custom'>('custom');
   const [name, setName] = useState('');
@@ -393,13 +395,15 @@ export function CreateHabitModal({
       }
 
       const tod = habitToEdit.timeOfDay || '';
-      if (tod === 'Morning' || tod === 'Afternoon' || tod === 'Night') {
+      if (tod === 'Morning' || tod === 'Afternoon' || tod === 'Evening' || tod === 'Night') {
         setTimeBlock(tod);
       } else if (tod.toLowerCase().includes('morning')) {
         setTimeBlock('Morning');
-      } else if (tod.toLowerCase().includes('afternoon') || tod.toLowerCase().includes('evening') || tod.toLowerCase().includes('noon')) {
+      } else if (tod.toLowerCase().includes('afternoon') || tod.toLowerCase().includes('noon') || tod.toLowerCase().includes('midday') || tod.toLowerCase().includes('lunch')) {
         setTimeBlock('Afternoon');
-      } else if (tod.toLowerCase().includes('night')) {
+      } else if (tod.toLowerCase().includes('evening') || tod.toLowerCase().includes('sunset') || tod.toLowerCase().includes('dusk')) {
+        setTimeBlock('Evening');
+      } else if (tod.toLowerCase().includes('night') || tod.toLowerCase().includes('bed') || tod.toLowerCase().includes('sleep') || tod.toLowerCase().includes('late')) {
         setTimeBlock('Night');
       } else {
         setTimeBlock('');
@@ -413,14 +417,14 @@ export function CreateHabitModal({
       setTarget(10);
       setUnit('reps');
       setRepeat('Daily');
-      setTimeBlock('');
+      setTimeBlock(prefilledTimeBlock || '');
       setEnableFocusTimer(false);
       setRoutineId(prefilledRoutineId || '');
       setSubHabits([]);
       setNewSubTitle('');
       setModalTab('custom');
     }
-  }, [habitToEdit, isOpen, prefilledRoutineId]);
+  }, [habitToEdit, isOpen, prefilledRoutineId, prefilledTimeBlock]);
 
   if (!isOpen) return null;
 

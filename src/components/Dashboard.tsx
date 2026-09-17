@@ -62,7 +62,7 @@ interface DashboardProps {
   onAddSubHabit?: (habitId: string, title: string) => Promise<void>;
   onToggleSubHabit?: (habitId: string, subHabitId: string, dateStr: string) => Promise<void>;
   onDeleteSubHabit?: (habitId: string, subHabitId: string) => Promise<void>;
-  openCreateHabit?: () => void;
+  openCreateHabit?: (defaultTimeBlock?: '' | 'Morning' | 'Afternoon' | 'Evening' | 'Night') => void;
 }
 
 // Food interfaces
@@ -1092,6 +1092,18 @@ export default function Dashboard({
                 </button>
               ))}
             </div>
+
+            {openCreateHabit && (
+              <button
+                type="button"
+                onClick={() => openCreateHabit(timeframeFilter === 'All' ? undefined : timeframeFilter)}
+                className="flex items-center gap-1 bg-gray-900 hover:bg-gray-800 text-white px-2.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer active:scale-95 shrink-0"
+                title={`Create new habit${timeframeFilter !== 'All' ? ` for ${timeframeFilter}` : ''}`}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Add</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -1141,6 +1153,17 @@ export default function Dashboard({
                           <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase" style={{ backgroundColor: tint, color }}>
                             {habit.category}
                           </span>
+                          {(() => {
+                            const tf = getHabitTimeframe(habit);
+                            if (tf === 'Anytime') return null;
+                            const icon = tf === 'Morning' ? '🌅' : tf === 'Afternoon' ? '☀️' : tf === 'Evening' ? '🌇' : '🌙';
+                            return (
+                              <span className="text-[8px] font-medium text-gray-500 bg-gray-100 px-1 py-0.5 rounded flex items-center gap-0.5">
+                                <span>{icon}</span>
+                                <span>{tf}</span>
+                              </span>
+                            );
+                          })()}
                         </div>
                         <span className="text-[10px] font-mono text-gray-400">
                           {currentVal} / {habit.target} {habit.unit}
@@ -1165,8 +1188,18 @@ export default function Dashboard({
 
         {/* Habit List */}
         {filteredHabits.length === 0 ? (
-          <div className="text-center py-6 text-xs text-gray-400 font-medium">
-            No habits active in this block today.
+          <div className="text-center py-8 text-xs text-gray-400 font-medium space-y-2.5">
+            <p>No habits active in this block today.</p>
+            {openCreateHabit && (
+              <button
+                type="button"
+                onClick={() => openCreateHabit(timeframeFilter === 'All' ? undefined : timeframeFilter)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition cursor-pointer active:scale-95"
+              >
+                <Plus className="w-3.5 h-3.5 text-gray-600" />
+                <span>Add habit{timeframeFilter !== 'All' ? ` for ${timeframeFilter}` : ''}</span>
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-2.5">
@@ -1220,6 +1253,17 @@ export default function Dashboard({
                         >
                           {habit.category}
                         </span>
+                        {(() => {
+                          const tf = getHabitTimeframe(habit);
+                          if (tf === 'Anytime') return null;
+                          const icon = tf === 'Morning' ? '🌅' : tf === 'Afternoon' ? '☀️' : tf === 'Evening' ? '🌇' : '🌙';
+                          return (
+                            <span className="text-[9px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                              <span>{icon}</span>
+                              <span>{tf}</span>
+                            </span>
+                          );
+                        })()}
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[11px] font-mono text-gray-400">

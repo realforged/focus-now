@@ -968,6 +968,9 @@ export const api = {
 
     const prevRoutineId = habit.routineId;
     Object.assign(habit, habitData);
+    if ('timeOfDay' in habitData) {
+      habit.timeOfDay = habitData.timeOfDay || undefined;
+    }
     saveLocalHabits(userId, habits);
 
     if (habitData.routineId !== undefined && habitData.routineId !== prevRoutineId) {
@@ -996,9 +999,9 @@ export const api = {
           if (habitData.unit !== undefined) payload.unit = habitData.unit;
           if (habitData.repeat !== undefined) payload.repeat = habitData.repeat;
           if (habitData.repeatDays !== undefined) payload.repeat_days = habitData.repeatDays;
-          if (habitData.timeOfDay !== undefined) payload.time_of_day = habitData.timeOfDay;
+          if ('timeOfDay' in habitData) payload.time_of_day = habitData.timeOfDay || null;
           if (habitData.enableFocusTimer !== undefined) payload.enable_focus_timer = habitData.enableFocusTimer;
-          if (habitData.routineId !== undefined) payload.routine_id = habitData.routineId;
+          if ('routineId' in habitData) payload.routine_id = habitData.routineId || null;
 
           await supabase.from('habits').update(payload).eq('id', habitId);
         }

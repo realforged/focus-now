@@ -734,9 +734,22 @@ export default function HabitsPage({
                             </button>
 
                             <div className="flex-1 min-w-0">
-                              <h3 className={`text-sm font-black truncate ${isCompleted ? 'line-through text-gray-400' : 'text-gray-900'}`}>
-                                {habit.name}
-                              </h3>
+                              <div className="flex items-center gap-2">
+                                <h3 className={`text-sm font-black truncate ${isCompleted ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+                                  {habit.name}
+                                </h3>
+                                {(() => {
+                                  const tf = classifyHabitTimeframe(habit, routines);
+                                  if (tf === 'Anytime') return null;
+                                  const icon = tf === 'Morning' ? '🌅' : tf === 'Afternoon' ? '☀️' : tf === 'Evening' ? '🌇' : '🌙';
+                                  return (
+                                    <span className="text-[9px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                                      <span>{icon}</span>
+                                      <span>{tf}</span>
+                                    </span>
+                                  );
+                                })()}
+                              </div>
                               <div className="flex items-center gap-2 mt-0.5">
                                 <span className="text-[10px] font-mono text-gray-400">
                                   {currentVal}/{habit.target} {habit.unit}

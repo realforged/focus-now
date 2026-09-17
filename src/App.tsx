@@ -306,23 +306,27 @@ function AppInner() {
   };
 
 
+  const [prefilledTimeBlock, setPrefilledTimeBlock] = useState<'' | 'Morning' | 'Afternoon' | 'Evening' | 'Night'>('');
+
   const closeHabitModal = () => {
     setIsHabitModalOpen(false);
     setHabitToEdit(null);
     setPrefilledRoutineId(undefined);
+    setPrefilledTimeBlock('');
   };
 
-  const openCreateHabit = () => {
+  const openCreateHabit = (defaultTimeBlock?: '' | 'Morning' | 'Afternoon' | 'Evening' | 'Night') => {
     setHabitToEdit(null);
     setPrefilledRoutineId(undefined);
+    setPrefilledTimeBlock(defaultTimeBlock || '');
     setIsHabitModalOpen(true);
   };
-
-
 
   // Inline quick-add: create a habit by name only, linked to a routine
   const handleCreateHabitInRoutine = async (routineId: string, name: string, category: Habit['category']) => {
     try {
+      const routine = routines.find(r => r.id === routineId);
+      const timeOfDay = routine?.timeBlock && routine.timeBlock !== 'Constant' ? routine.timeBlock : undefined;
       await api.createHabit({
         name,
         category,
@@ -333,6 +337,7 @@ function AppInner() {
         repeat: 'Daily',
         enableFocusTimer: false,
         routineId,
+        timeOfDay,
       });
       const [nextHabits, nextRoutines] = await Promise.all([api.getHabits(), api.getRoutines()]);
       setHabits(nextHabits);
@@ -417,7 +422,8 @@ function AppInner() {
           type: 'Count',
           target: 10,
           unit: 'reps',
-          repeat: rtData.repeat
+          repeat: rtData.repeat,
+          timeOfDay: rtData.timeBlock !== 'Constant' ? rtData.timeBlock : undefined,
         });
         generatedHabitIds.push(hRes.id);
       }
@@ -857,6 +863,7 @@ function AppInner() {
         onDelete={handleDeleteHabit}
         habitToEdit={habitToEdit}
         prefilledRoutineId={prefilledRoutineId}
+        prefilledTimeBlock={prefilledTimeBlock}
       />
 
       <CreateRoutineModal
