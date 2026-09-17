@@ -415,34 +415,44 @@ export default function Dashboard({
   // Filter Focus Habits (Starred and scheduled for today)
   const focusHabits = habits.filter(h => starredHabits.includes(h.id) && isHabitScheduledForDate(h, dateToday));
 
-  // Quick Habit Logger timeframe filter - default to current time of day
-  const [timeframeFilter, setTimeframeFilter] = useState<'All' | 'Morning' | 'Evening' | 'Night'>(() => {
+  // THREE TIMELINES: Morning 5am-12pm | Afternoon 12pm-6pm | Night 6pm-5am
+  const TIME_LABELS = {
+    Morning:   { emoji: '🌅', label: 'Morning',   range: '5am–12pm' },
+    Afternoon: { emoji: '☀️', label: 'Afternoon', range: '12pm–6pm' },
+    Night:     { emoji: '🌙', label: 'Night',      range: '6pm–5am' },
+  } as const;
+
+  const [timeframeFilter, setTimeframeFilter] = useState<'All' | 'Morning' | 'Afternoon' | 'Night'>(() => {
     const hr = new Date().getHours();
-    if (hr < 12) return 'Morning';
-    if (hr < 18) return 'Evening';
+    if (hr >= 5 && hr < 12) return 'Morning';
+    if (hr >= 12 && hr < 18) return 'Afternoon';
     return 'Night';
   });
 
-  const getHabitTimeframe = (habit: Habit): 'Morning' | 'Evening' | 'Night' | 'Anytime' => {
+  // Maps any habit to one of our 3 display timelines
+  const getHabitTimeframe = (habit: Habit): 'Morning' | 'Afternoon' | 'Night' | 'Anytime' => {
     const parentRoutine = routines.find(r => r.habitIds.includes(habit.id) || habit.routineId === r.id);
     if (parentRoutine) {
-      if (parentRoutine.timeBlock === 'Morning') return 'Morning';
-      if (parentRoutine.timeBlock === 'Evening') return 'Evening';
-      if (parentRoutine.timeBlock === 'Night') return 'Night';
+      if (parentRoutine.timeBlock === 'Morning')  return 'Morning';
+      if (parentRoutine.timeBlock === 'Evening')  return 'Afternoon'; // stored as Evening = daytime
+      if (parentRoutine.timeBlock === 'Night')    return 'Night';
+      if (parentRoutine.timeBlock === 'Constant') return 'Anytime';
     }
     if (habit.timeOfDay) {
       const tod = habit.timeOfDay.toLowerCase().trim();
+      if (tod === 'anytime' || tod === 'constant' || tod === 'none') return 'Anytime';
       const match = tod.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
       if (match) {
         let hour = Number(match[1]);
         if (match[3] === 'pm' && hour < 12) hour += 12;
-        if (hour < 12) return 'Morning';
-        if (hour < 17) return 'Evening';
+        if (match[3] === 'am' && hour === 12) hour = 0;
+        if (hour >= 5 && hour < 12) return 'Morning';
+        if (hour >= 12 && hour < 18) return 'Afternoon';
         return 'Night';
       }
-      if (tod.includes('morning')) return 'Morning';
-      if (tod.includes('evening') || tod.includes('afternoon')) return 'Evening';
-      if (tod.includes('night')) return 'Night';
+      if (tod.includes('morning'))                              return 'Morning';
+      if (tod.includes('afternoon') || tod.includes('noon'))   return 'Afternoon';
+      if (tod.includes('evening') || tod.includes('night'))    return 'Night';
     }
     return 'Anytime';
   };
@@ -451,7 +461,8 @@ export default function Dashboard({
     if (!isHabitScheduledForDate(habit, dateToday)) return false;
     if (selectedCategoryId && habit.category !== selectedCategoryId) return false;
     if (timeframeFilter === 'All') return true;
-    return getHabitTimeframe(habit) === timeframeFilter;
+    const tf = getHabitTimeframe(habit);
+    return tf === timeframeFilter || (timeframeFilter === 'All');
   });
 
   // Calculate routine completions
@@ -1051,20 +1062,26 @@ export default function Dashboard({
               </button>
             )}
 
-            {/* Timeframe Filter Pills */}
+            {/* Timeframe Filter Pills — 3 Timelines */}
             <div className="flex bg-gray-100 p-1 rounded-xl gap-0.5">
-              {(['All', 'Morning', 'Evening', 'Night'] as const).map(tf => (
+              {([
+                { id: 'All',       emoji: '⚡', label: 'All' },
+                { id: 'Morning',   emoji: '🌅', label: 'Morning' },
+                { id: 'Afternoon', emoji: '☀️', label: 'Afternoon' },
+                { id: 'Night',     emoji: '🌙', label: 'Night' },
+              ] as const).map(tf => (
                 <button
-                  key={tf}
+                  key={tf.id}
                   type="button"
-                  onClick={() => setTimeframeFilter(tf)}
-                  className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase transition cursor-pointer ${
-                    timeframeFilter === tf
+                  onClick={() => setTimeframeFilter(tf.id)}
+                  className={`flex items-center gap-0.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition cursor-pointer ${
+                    timeframeFilter === tf.id
                       ? 'bg-white text-gray-900 shadow-xs'
                       : 'text-gray-500 hover:text-gray-800'
                   }`}
                 >
-                  {tf}
+                  <span>{tf.emoji}</span>
+                  <span>{tf.label}</span>
                 </button>
               ))}
             </div>

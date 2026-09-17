@@ -475,10 +475,10 @@ export function CreateHabitModal({
   ];
 
   const timeBlocks: { id: '' | 'Morning' | 'Evening' | 'Night'; label: string; icon: string; sub: string }[] = [
-    { id: 'Morning', label: 'Morning', icon: '☀️', sub: 'Win the morning' },
-    { id: 'Evening', label: 'Evening', icon: '🌇', sub: 'Deep flow' },
-    { id: 'Night', label: 'Night', icon: '🌙', sub: 'Shutdown & sleep' },
-    { id: '', label: 'Anytime', icon: '🔄', sub: 'Flexible' },
+    { id: 'Morning', label: 'Morning',   icon: '🌅', sub: '5am – 12pm' },
+    { id: 'Evening', label: 'Afternoon', icon: '☀️', sub: '12pm – 6pm' },
+    { id: 'Night',   label: 'Night',     icon: '🌙', sub: '6pm – 5am' },
+    { id: '',        label: 'Anytime',   icon: '⚡', sub: 'All day flexible' },
   ];
 
   const handleActionStyleChange = (style: 'check' | 'count' | 'timer') => {
@@ -750,7 +750,7 @@ export function CreateHabitModal({
                       </span>
                       {p.timeBlock && (
                         <span className="bg-[#191D2A] px-2 py-0.5 rounded-md border border-[#252B3C]">
-                          {p.timeBlock === 'Morning' ? '☀️ Morning' : p.timeBlock === 'Evening' ? '🌇 Evening' : '🌙 Night'}
+                          {p.timeBlock === 'Morning' ? '🌅 Morning' : p.timeBlock === 'Evening' ? '☀️ Afternoon' : '🌙 Night'}
                         </span>
                       )}
                     </div>
@@ -1306,10 +1306,10 @@ export function CreateRoutineModal({ isOpen, onClose, onCreate }: CreateRoutineM
   ];
 
   const timeBlocks: { id: typeof timeBlock; label: string; icon: string; activeClass: string }[] = [
-    { id: 'Morning',  label: 'Morning',  icon: '☀️',  activeClass: 'border-[#FDAF17] bg-[#FDAF17]/10 text-white shadow-md' },
-    { id: 'Evening',  label: 'Evening',  icon: '🌇',  activeClass: 'border-[#F06A33] bg-[#F06A33]/10 text-white shadow-md' },
-    { id: 'Night',    label: 'Night',    icon: '🌙',  activeClass: 'border-[#7952B3] bg-[#7952B3]/10 text-white shadow-md' },
-    { id: 'Constant', label: 'Constant', icon: '🔄',  activeClass: 'border-[#12B886] bg-[#12B886]/10 text-white shadow-md' },
+    { id: 'Morning',  label: 'Morning',   icon: '🌅',  activeClass: 'border-[#FDAF17] bg-[#FDAF17]/10 text-white shadow-md' },
+    { id: 'Evening',  label: 'Afternoon', icon: '☀️',  activeClass: 'border-[#F06A33] bg-[#F06A33]/10 text-white shadow-md' },
+    { id: 'Night',    label: 'Night',     icon: '🌙',  activeClass: 'border-[#7952B3] bg-[#7952B3]/10 text-white shadow-md' },
+    { id: 'Constant', label: 'Anytime',   icon: '⚡',  activeClass: 'border-[#12B886] bg-[#12B886]/10 text-white shadow-md' },
   ];
 
   return (

@@ -36,7 +36,7 @@ const getPillarConfig = (cat: Category) => PILLAR_MAP[cat] ?? {
 
 // ─── TIME BLOCKS ──────────────────────────────────────────────────────────────
 interface TimeBlockConfig {
-  id: 'Morning' | 'Afternoon' | 'Evening' | 'Anytime';
+  id: 'Morning' | 'Afternoon' | 'Night' | 'Anytime';
   label: string;
   emoji: string;
   hours: string;
@@ -44,18 +44,19 @@ interface TimeBlockConfig {
 }
 
 const TIME_BLOCKS: TimeBlockConfig[] = [
-  { id: 'Morning',   label: 'Morning',   emoji: '☀️',  hours: '6:00 AM – 11:00 AM', defaultMinutes: 85 },
-  { id: 'Afternoon', label: 'Afternoon', emoji: '🌤️', hours: '11:00 AM – 5:00 PM',  defaultMinutes: 110 },
-  { id: 'Evening',   label: 'Evening',   emoji: '🌙',  hours: '5:00 PM – 11:00 PM', defaultMinutes: 45 },
-  { id: 'Anytime',   label: 'Anytime Disciplines', emoji: '⚡', hours: 'All Day Habit Stack', defaultMinutes: 30 },
+  { id: 'Morning',   label: 'Morning',              emoji: '🌅',  hours: '5:00 AM – 12:00 PM', defaultMinutes: 85 },
+  { id: 'Afternoon', label: 'Afternoon',             emoji: '☀️',  hours: '12:00 PM – 6:00 PM', defaultMinutes: 110 },
+  { id: 'Night',     label: 'Night',                 emoji: '🌙',  hours: '6:00 PM – 5:00 AM',  defaultMinutes: 45 },
+  { id: 'Anytime',   label: 'Anytime Disciplines',  emoji: '⚡',  hours: 'All Day Habit Stack',  defaultMinutes: 30 },
 ];
 
-function classifyHabitTimeframe(habit: Habit, routines: Routine[]): 'Morning' | 'Afternoon' | 'Evening' | 'Anytime' {
+function classifyHabitTimeframe(habit: Habit, routines: Routine[]): 'Morning' | 'Afternoon' | 'Night' | 'Anytime' {
   const parentRoutine = routines.find(r => r.habitIds.includes(habit.id) || habit.routineId === r.id);
   if (parentRoutine) {
-    if (parentRoutine.timeBlock === 'Morning') return 'Morning';
-    if (parentRoutine.timeBlock === 'Evening') return 'Evening';
-    if (parentRoutine.timeBlock === 'Night') return 'Evening';
+    if (parentRoutine.timeBlock === 'Morning')  return 'Morning';
+    if (parentRoutine.timeBlock === 'Evening')  return 'Afternoon'; // stored "Evening" = daytime afternoon
+    if (parentRoutine.timeBlock === 'Night')    return 'Night';
+    if (parentRoutine.timeBlock === 'Constant') return 'Anytime';
   }
   if (habit.timeOfDay) {
     const tod = habit.timeOfDay.toLowerCase().trim();
@@ -65,13 +66,13 @@ function classifyHabitTimeframe(habit: Habit, routines: Routine[]): 'Morning' | 
       let hr = parseInt(m[1], 10);
       if (m[3] === 'pm' && hr < 12) hr += 12;
       if (m[3] === 'am' && hr === 12) hr = 0;
-      if (hr >= 5 && hr < 11) return 'Morning';
-      if (hr >= 11 && hr < 17) return 'Afternoon';
-      return 'Evening';
+      if (hr >= 5 && hr < 12) return 'Morning';
+      if (hr >= 12 && hr < 18) return 'Afternoon';
+      return 'Night';
     }
-    if (tod.includes('morning')) return 'Morning';
-    if (tod.includes('afternoon')) return 'Afternoon';
-    if (tod.includes('evening') || tod.includes('night')) return 'Evening';
+    if (tod.includes('morning'))                              return 'Morning';
+    if (tod.includes('afternoon') || tod.includes('noon'))   return 'Afternoon';
+    if (tod.includes('evening') || tod.includes('night'))    return 'Night';
   }
   return 'Anytime';
 }
