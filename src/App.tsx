@@ -25,7 +25,16 @@ export default function App() {
 function AppInner() {
   const toast = useToast();
 
-  const [token, setToken] = useState<string | null>(localStorage.getItem('habit_mountain_token'));
+  const [token, setToken] = useState<string | null>(() => {
+    const direct = localStorage.getItem('habit_mountain_token');
+    if (direct) return direct;
+    const session = api.getCurrentSession();
+    if (session?.token) {
+      localStorage.setItem('habit_mountain_token', session.token);
+      return session.token;
+    }
+    return null;
+  });
   const [currentUser, setCurrentUser] = useState<any | null>(null);
 
   const [currentTab, setTab] = useState<string>('dashboard');
@@ -73,16 +82,18 @@ function AppInner() {
 
   // Fetch all user details, habits, routines on mounting/authentication
   const loadAllData = async () => {
-    if (!token) {
-      // Try to restore a local session even if habit_mountain_token is gone
+    let activeToken = token;
+    if (!activeToken) {
+      // Try to restore a local session even if habit_mountain_token is temporarily missing
       const localSession = api.getCurrentSession();
       if (localSession?.token) {
         localStorage.setItem('habit_mountain_token', localSession.token);
         setToken(localSession.token);
-        return; // will re-trigger via token dependency
+        activeToken = localSession.token;
+      } else {
+        setAppLoading(false);
+        return;
       }
-      setAppLoading(false);
-      return;
     }
     setAppLoading(true);
     try {
@@ -99,23 +110,13 @@ function AppInner() {
 
       const computedPoints = calculateTotalEarnedPoints(hData, rData);
       setUserPoints(computedPoints);
-      if ((profile.total_points || 0) !== computedPoints) {
+      if ((profile?.total_points || 0) !== computedPoints) {
         await api.syncJourney({ total_points: computedPoints });
       }
 
     } catch (err: any) {
       console.error('Error loading full-stack assets:', err);
-      // Only force logout for Supabase remote tokens (not local ones which never expire)
-      const isLocalToken = token?.startsWith('local_token_');
-      if (
-        !isLocalToken &&
-        (
-          (err instanceof ApiError && (err.status === 401 || err.status === 403)) ||
-          err.message?.toLowerCase().includes('expired')
-        )
-      ) {
-        handleLogout();
-      }
+      // Local-first: never force logout on background error, keep session intact
     } finally {
       setAppLoading(false);
     }
@@ -599,11 +600,6 @@ function AppInner() {
   };
 
 
-  // Render Login/Register Overlay if not authenticated
-  if (!token) {
-    return <AuthPage onAuthSuccess={handleAuthSuccess} />;
-  }
-
   // Loading buffer
   if (appLoading) {
     return (
@@ -617,6 +613,11 @@ function AppInner() {
         </p>
       </div>
     );
+  }
+
+  // Render Login/Register Overlay if not authenticated
+  if (!token) {
+    return <AuthPage onAuthSuccess={handleAuthSuccess} />;
   }
 
   // Compute momentum live score

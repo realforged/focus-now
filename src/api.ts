@@ -1,6 +1,6 @@
 import { Habit, Routine, Category, SubHabit } from './types';
 import { supabase, isSupabaseConfigured } from './supabase';
-import { mapLegacyCategory, dateToday } from './data';
+import { mapLegacyCategory, dateToday, INITIAL_HABITS, INITIAL_ROUTINES } from './data';
 
 export class ApiError extends Error {
   status: number;
@@ -48,7 +48,7 @@ interface LocalUser {
   createdAt: string;
 }
 
-interface LocalSession {
+export interface LocalSession {
   id: string;
   email: string;
   token: string;
@@ -90,10 +90,35 @@ function saveLocalUsers(users: Record<string, LocalUser>): void {
 function getLocalSession(): LocalSession | null {
   try {
     const raw = localStorage.getItem(LOCAL_SESSION_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.id && parsed?.token) return parsed;
+    }
   } catch {
-    return null;
+    // ignore
   }
+
+  // Fallback: restore from habit_mountain_token if set
+  const token = localStorage.getItem('habit_mountain_token');
+  if (token) {
+    let id = 'guest_user';
+    let email = 'charan@focusnow.app';
+    if (token.startsWith('local_token_')) {
+      id = token.replace('local_token_', '');
+      const users = getLocalUsers();
+      for (const u of Object.values(users)) {
+        if (u.id === id) {
+          email = u.email;
+          break;
+        }
+      }
+    }
+    const session: LocalSession = { id, email, token };
+    localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(session));
+    return session;
+  }
+
+  return null;
 }
 
 function setLocalSession(session: LocalSession): void {
@@ -106,6 +131,55 @@ function clearLocalSession(): void {
   localStorage.removeItem('habit_mountain_token');
 }
 
+// Seamlessly migrate guest / previous session habits, routines, and profile to registered account
+function migrateUserData(fromUserId: string, toUserId: string): void {
+  if (!fromUserId || !toUserId || fromUserId === toUserId) return;
+
+  // 1. Migrate Habits if target user has none
+  try {
+    const targetHabitsRaw = localStorage.getItem(LOCAL_HABITS_PREFIX + toUserId);
+    const sourceHabitsRaw = localStorage.getItem(LOCAL_HABITS_PREFIX + fromUserId);
+    if ((!targetHabitsRaw || targetHabitsRaw === '[]') && sourceHabitsRaw && sourceHabitsRaw !== '[]') {
+      localStorage.setItem(LOCAL_HABITS_PREFIX + toUserId, sourceHabitsRaw);
+    }
+  } catch {
+    // ignore
+  }
+
+  // 2. Migrate Routines if target user has none
+  try {
+    const targetRoutinesRaw = localStorage.getItem(LOCAL_ROUTINES_PREFIX + toUserId);
+    const sourceRoutinesRaw = localStorage.getItem(LOCAL_ROUTINES_PREFIX + fromUserId);
+    if ((!targetRoutinesRaw || targetRoutinesRaw === '[]') && sourceRoutinesRaw && sourceRoutinesRaw !== '[]') {
+      localStorage.setItem(LOCAL_ROUTINES_PREFIX + toUserId, sourceRoutinesRaw);
+    }
+  } catch {
+    // ignore
+  }
+
+  // 3. Migrate Profile points and streak
+  try {
+    const sourceProfileRaw = localStorage.getItem(LOCAL_PROFILE_PREFIX + fromUserId);
+    if (sourceProfileRaw) {
+      const sourceProfile = JSON.parse(sourceProfileRaw);
+      const targetProfileRaw = localStorage.getItem(LOCAL_PROFILE_PREFIX + toUserId);
+      const targetProfile = targetProfileRaw ? JSON.parse(targetProfileRaw) : {};
+      const merged = {
+        ...sourceProfile,
+        ...targetProfile,
+        id: toUserId,
+        email: targetProfile?.email || sourceProfile.email,
+        total_points: Math.max(sourceProfile.total_points || 0, targetProfile.total_points || 0),
+        locked_in_days: Math.max(sourceProfile.locked_in_days || 0, targetProfile.locked_in_days || 0),
+        consecutive_locked_in_streak: Math.max(sourceProfile.consecutive_locked_in_streak || 0, targetProfile.consecutive_locked_in_streak || 0),
+      };
+      localStorage.setItem(LOCAL_PROFILE_PREFIX + toUserId, JSON.stringify(merged));
+    }
+  } catch {
+    // ignore
+  }
+}
+
 function getLocalProfile(userId: string, email?: string) {
   try {
     const raw = localStorage.getItem(LOCAL_PROFILE_PREFIX + userId);
@@ -113,6 +187,26 @@ function getLocalProfile(userId: string, email?: string) {
   } catch {
     // ignore
   }
+
+  // Fallback to guest profile if this is a newly registered user
+  if (userId !== 'guest_user') {
+    try {
+      const guestRaw = localStorage.getItem(LOCAL_PROFILE_PREFIX + 'guest_user');
+      if (guestRaw) {
+        const parsed = JSON.parse(guestRaw);
+        const inherited = {
+          ...parsed,
+          id: userId,
+          email: email || parsed.email || 'charan@focusnow.app',
+        };
+        saveLocalProfile(inherited);
+        return inherited;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   const defaultProfile = {
     id: userId,
     email: email || 'Guest User',
@@ -216,7 +310,50 @@ function getLocalHabits(userId: string): Habit[] {
   } catch {
     // ignore
   }
-  const defaults = createDefaultHabits(userId);
+
+  // 1. Fallback to guest habits if available
+  if (userId !== 'guest_user') {
+    try {
+      const guestRaw = localStorage.getItem(LOCAL_HABITS_PREFIX + 'guest_user');
+      if (guestRaw) {
+        const guestParsed = JSON.parse(guestRaw);
+        if (Array.isArray(guestParsed) && guestParsed.length > 0) {
+          const habits = guestParsed.map((h: any) => ({
+            ...h,
+            category: mapLegacyCategory(h.category),
+          }));
+          saveLocalHabits(userId, habits);
+          return habits;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // 2. Fallback to legacy 'focus_now_habits'
+  try {
+    const legacyRaw = localStorage.getItem('focus_now_habits');
+    if (legacyRaw) {
+      const legacyParsed = JSON.parse(legacyRaw);
+      if (Array.isArray(legacyParsed) && legacyParsed.length > 0) {
+        const habits = legacyParsed.map((h: any) => ({
+          ...h,
+          category: mapLegacyCategory(h.category),
+        }));
+        saveLocalHabits(userId, habits);
+        return habits;
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  // 3. Fallback to INITIAL_HABITS so user always has rich interactive habits
+  const defaults = INITIAL_HABITS.map((h) => ({
+    ...h,
+    category: mapLegacyCategory(h.category),
+  }));
   saveLocalHabits(userId, defaults);
   return defaults;
 }
@@ -230,12 +367,45 @@ function getLocalRoutines(userId: string): Routine[] {
     const raw = localStorage.getItem(LOCAL_ROUTINES_PREFIX + userId);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     }
   } catch {
     // ignore
   }
-  return [];
+
+  // 1. Fallback to guest routines if available
+  if (userId !== 'guest_user') {
+    try {
+      const guestRaw = localStorage.getItem(LOCAL_ROUTINES_PREFIX + 'guest_user');
+      if (guestRaw) {
+        const guestParsed = JSON.parse(guestRaw);
+        if (Array.isArray(guestParsed) && guestParsed.length > 0) {
+          saveLocalRoutines(userId, guestParsed);
+          return guestParsed;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // 2. Fallback to legacy 'focus_now_routines'
+  try {
+    const legacyRaw = localStorage.getItem('focus_now_routines');
+    if (legacyRaw) {
+      const legacyParsed = JSON.parse(legacyRaw);
+      if (Array.isArray(legacyParsed) && legacyParsed.length > 0) {
+        saveLocalRoutines(userId, legacyParsed);
+        return legacyParsed;
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  // 3. Fallback to INITIAL_ROUTINES
+  saveLocalRoutines(userId, INITIAL_ROUTINES);
+  return INITIAL_ROUTINES;
 }
 
 function saveLocalRoutines(userId: string, routines: Routine[]): void {
@@ -284,8 +454,16 @@ async function removeHabitFromRoutine(routineId: string, habitId: string): Promi
   if (updateError) throw new ApiError(updateError.message, 500);
 }
 
-// Helper to determine effective user id (remote or local)
+// Helper to determine effective user id (local-first, remote-capable)
 async function getEffectiveUserId(): Promise<string> {
+  const session = getLocalSession();
+  if (session?.id) return session.id;
+
+  const token = localStorage.getItem('habit_mountain_token');
+  if (token?.startsWith('local_token_')) {
+    return token.replace('local_token_', '');
+  }
+
   if (!supabaseKnownOffline) {
     try {
       const { data: userAuth } = await supabase.auth.getUser();
@@ -294,9 +472,7 @@ async function getEffectiveUserId(): Promise<string> {
       supabaseKnownOffline = true;
     }
   }
-  const session = getLocalSession();
-  if (session?.id) return session.id;
-  // Fallback to guest
+
   return 'guest_user';
 }
 
@@ -305,8 +481,27 @@ export const api = {
 
   async login(emailStr: string, passwordStr: string) {
     const email = emailStr.trim().toLowerCase();
+    const prevUserId = (await getEffectiveUserId()) || 'guest_user';
 
-    // 1. Try Supabase if not flagged offline
+    // 1. Try Local Mode first (ensures local users are never blocked by Supabase errors)
+    const users = getLocalUsers();
+    const existing = users[email];
+    if (existing) {
+      const hash = await hashPassword(passwordStr);
+      if (existing.passwordHash !== hash) {
+        throw new ApiError('Incorrect password. Please try again.', 401);
+      }
+
+      const token = 'local_token_' + existing.id;
+      const session: LocalSession = { id: existing.id, email, token };
+      // Migrate guest or previous session data so nothing is missing
+      migrateUserData(prevUserId, existing.id);
+      setLocalSession(session);
+      const profile = getLocalProfile(existing.id, email);
+      return { token, user: profile };
+    }
+
+    // 2. Try Supabase if not flagged offline
     if (!supabaseKnownOffline) {
       try {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password: passwordStr });
@@ -317,8 +512,9 @@ export const api = {
             throw new ApiError(error.message, error.status || 400);
           }
         } else if (data?.session) {
-          const profile = await this.getProfile();
+          migrateUserData(prevUserId, data.session.user.id);
           setLocalSession({ id: data.session.user.id, email, token: data.session.access_token });
+          const profile = await this.getProfile();
           return { token: data.session.access_token, user: profile };
         }
       } catch (err: any) {
@@ -330,23 +526,7 @@ export const api = {
       }
     }
 
-    // 2. Local Mode Authentication
-    const users = getLocalUsers();
-    const existing = users[email];
-    if (!existing) {
-      throw new ApiError('No account found for this email. Click "Create Account" below to register.', 404);
-    }
-
-    const hash = await hashPassword(passwordStr);
-    if (existing.passwordHash !== hash) {
-      throw new ApiError('Incorrect password. Please try again.', 401);
-    }
-
-    const token = 'local_token_' + existing.id;
-    const session: LocalSession = { id: existing.id, email, token };
-    setLocalSession(session);
-    const profile = getLocalProfile(existing.id, email);
-    return { token, user: profile };
+    throw new ApiError('No account found for this email. Click "Create Account" below to register.', 404);
   },
 
   async logout() {
@@ -360,6 +540,15 @@ export const api = {
 
   async register(emailStr: string, passwordStr: string) {
     const email = emailStr.trim().toLowerCase();
+    const prevUserId = (await getEffectiveUserId()) || 'guest_user';
+
+    const users = getLocalUsers();
+    if (users[email]) {
+      throw new ApiError('An account with this email already exists. Please sign in.', 400);
+    }
+
+    let remoteUserId: string | null = null;
+    let remoteToken: string | null = null;
 
     if (!supabaseKnownOffline) {
       try {
@@ -374,33 +563,20 @@ export const api = {
         if (error) {
           if (isNetworkError(error) || isRateLimitError(error)) {
             supabaseKnownOffline = true;
-          } else {
-            throw new ApiError(error.message, error.status || 400);
           }
         } else if (data?.session) {
-          const profile = await this.getProfile();
-          setLocalSession({ id: data.session.user.id, email, token: data.session.access_token });
-          return { token: data.session.access_token, user: profile };
-        } else if (data?.user && !data.session) {
-          // Email confirmation required in Supabase
-          throw new ApiError('Registration successful. Please check your email to verify your account, then sign in.', 202);
+          remoteUserId = data.session.user.id;
+          remoteToken = data.session.access_token;
         }
       } catch (err: any) {
         if (isNetworkError(err) || (err instanceof ApiError && err.status === 429)) {
           supabaseKnownOffline = true;
-        } else if (err instanceof ApiError) {
-          throw err;
         }
       }
     }
 
-    // Local Mode Registration
-    const users = getLocalUsers();
-    if (users[email]) {
-      throw new ApiError('An account with this email already exists. Please sign in.', 400);
-    }
-
-    const userId = 'user_' + Date.now();
+    // Always register locally so user can always access their account offline & across restarts
+    const userId = remoteUserId || ('user_' + Date.now());
     const hash = await hashPassword(passwordStr);
     const newUser: LocalUser = {
       id: userId,
@@ -411,13 +587,15 @@ export const api = {
     users[email] = newUser;
     saveLocalUsers(users);
 
-    const token = 'local_token_' + userId;
+    const token = remoteToken || ('local_token_' + userId);
     const session: LocalSession = { id: userId, email, token };
+
+    // Migrate any data from guest session to the newly registered account
+    migrateUserData(prevUserId, userId);
     setLocalSession(session);
 
-    // Initialize baseline profile & habits
     const profile = getLocalProfile(userId, email);
-    getLocalHabits(userId); // triggers seed if empty
+    getLocalHabits(userId); // ensure seeded
 
     return { token, user: profile };
   },
@@ -430,35 +608,6 @@ export const api = {
   },
 
   async startGuestSession() {
-    // 1. Try Supabase anonymous login if online
-    if (!supabaseKnownOffline) {
-      try {
-        const { data: existing } = await supabase.auth.getSession();
-        if (existing?.session) {
-          const profile = await this.getProfile();
-          setLocalSession({ id: existing.session.user.id, email: 'guest@focusnow.app', token: existing.session.access_token });
-          return { token: existing.session.access_token, user: profile };
-        }
-
-        const { data, error } = await supabase.auth.signInAnonymously({
-          options: {
-            data: { display_name: 'Guest User' },
-          },
-        });
-
-        if (error) {
-          supabaseKnownOffline = true;
-        } else if (data?.session) {
-          const profile = await this.getProfile();
-          setLocalSession({ id: data.session.user.id, email: 'guest@focusnow.app', token: data.session.access_token });
-          return { token: data.session.access_token, user: profile };
-        }
-      } catch {
-        supabaseKnownOffline = true;
-      }
-    }
-
-    // 2. Instant Local Guest Session
     const guestId = 'guest_user';
     const guestEmail = 'guest@focusnow.app';
     const token = 'local_token_guest';
@@ -481,57 +630,29 @@ export const api = {
 
   async getProfile() {
     const session = getLocalSession();
+    const userId = session?.id || 'guest_user';
+    const email = session?.email || 'charan@focusnow.app';
+
     // In local mode or if using a local token, immediately use local profile
     if (!isSupabaseConfigured || supabaseKnownOffline || session?.token?.startsWith('local_token_')) {
-      const userId = session?.id || 'guest_user';
-      return getLocalProfile(userId, session?.email || 'charan@focusnow.app');
+      return getLocalProfile(userId, email);
     }
 
     if (!supabaseKnownOffline) {
       try {
-        const { data: userAuth, error: authError } = await supabase.auth.getUser();
-        if (authError || !userAuth?.user) {
-          if (session) {
-            return getLocalProfile(session.id, session.email);
-          }
-          if (isNetworkError(authError)) {
-            supabaseKnownOffline = true;
-          } else {
-            throw new ApiError('Not authenticated', 401);
-          }
-        } else {
-          const { data, error } = await supabase.from('profiles').select('*').eq('id', userAuth.user.id).maybeSingle();
-          if (error) {
-            if (isNetworkError(error)) supabaseKnownOffline = true;
-            else throw new ApiError(error.message, 500);
-          } else if (data) {
-            return data;
-          } else {
-            const { data: created, error: createError } = await supabase
-              .from('profiles')
-              .insert({
-                id: userAuth.user.id,
-                email: userAuth.user.email || 'Focus User',
-                total_points: 0,
-                locked_in_days: 0,
-                consecutive_locked_in_streak: 0,
-              })
-              .select()
-              .single();
-            if (createError) throw new ApiError(createError.message, 500);
-            return created;
-          }
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData?.session) {
+          const uid = sessionData.session.user.id;
+          const { data: profile } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
+          if (profile) return profile;
         }
-      } catch (err: any) {
-        if (isNetworkError(err)) supabaseKnownOffline = true;
-        else if (session) return getLocalProfile(session.id, session.email);
-        else throw err;
+      } catch {
+        supabaseKnownOffline = true;
       }
     }
 
-    // Local fallback
-    const userId = session?.id || 'guest_user';
-    return getLocalProfile(userId, session?.email || 'charan@focusnow.app');
+    // Local fallback — NEVER throw 401
+    return getLocalProfile(userId, email);
   },
 
   async syncJourney(stats: {
