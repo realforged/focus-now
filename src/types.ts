@@ -75,7 +75,7 @@ export interface Routine {
   id: string;
   name: string;
   points: number; // points awarded upon completing the entire routine list
-  timeBlock: 'Morning' | 'Evening' | 'Night' | 'Constant';
+  timeBlock: 'Morning' | 'Afternoon' | 'Evening' | 'Night' | 'Constant';
   repeat: 'Daily' | 'Custom Days' | 'Today Only';
   repeatDays?: number[];
   habitIds: string[]; // sequence of habit IDs inside this routine

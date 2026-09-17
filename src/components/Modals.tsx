@@ -38,7 +38,7 @@ export interface HabitPreset {
   actionStyle: 'check' | 'count' | 'timer';
   target: number;
   unit: string;
-  timeBlock: '' | 'Morning' | 'Evening' | 'Night';
+  timeBlock: '' | 'Morning' | 'Afternoon' | 'Evening' | 'Night';
   points: number;
   subHabits: string[];
   icon: string;
@@ -93,7 +93,7 @@ const HABIT_PRESETS: HabitPreset[] = [
     actionStyle: 'timer',
     target: 15,
     unit: 'min',
-    timeBlock: 'Evening',
+    timeBlock: 'Afternoon',
     points: 10,
     subHabits: ['Deep hip openers (90/90)', 'Hamstring & spine decompression', 'Diaphragmatic box breathing'],
     icon: '🧘',
@@ -214,7 +214,7 @@ const HABIT_PRESETS: HabitPreset[] = [
     actionStyle: 'timer',
     target: 60,
     unit: 'min',
-    timeBlock: 'Evening',
+    timeBlock: 'Afternoon',
     points: 25,
     subHabits: ['Review backlog tickets', 'Write and test clean features', 'Deploy or ship PR'],
     icon: '💻',
@@ -362,7 +362,7 @@ export function CreateHabitModal({
   const [target, setTarget] = useState<number | string>(10);
   const [unit, setUnit] = useState('reps');
   const [repeat, setRepeat] = useState<'Daily' | 'Custom Days' | 'Today Only'>('Daily');
-  const [timeBlock, setTimeBlock] = useState<'' | 'Morning' | 'Evening' | 'Night'>('');
+  const [timeBlock, setTimeBlock] = useState<'' | 'Morning' | 'Afternoon' | 'Evening' | 'Night'>('');
   const [enableFocusTimer, setEnableFocusTimer] = useState(false);
   const [routineId, setRoutineId] = useState('');
   const [subHabits, setSubHabits] = useState<SubHabit[]>([]);
@@ -393,12 +393,12 @@ export function CreateHabitModal({
       }
 
       const tod = habitToEdit.timeOfDay || '';
-      if (tod === 'Morning' || tod === 'Evening' || tod === 'Night') {
+      if (tod === 'Morning' || tod === 'Afternoon' || tod === 'Night') {
         setTimeBlock(tod);
       } else if (tod.toLowerCase().includes('morning')) {
         setTimeBlock('Morning');
-      } else if (tod.toLowerCase().includes('evening') || tod.toLowerCase().includes('afternoon')) {
-        setTimeBlock('Evening');
+      } else if (tod.toLowerCase().includes('afternoon') || tod.toLowerCase().includes('evening') || tod.toLowerCase().includes('noon')) {
+        setTimeBlock('Afternoon');
       } else if (tod.toLowerCase().includes('night')) {
         setTimeBlock('Night');
       } else {
@@ -474,11 +474,11 @@ export function CreateHabitModal({
     },
   ];
 
-  const timeBlocks: { id: '' | 'Morning' | 'Evening' | 'Night'; label: string; icon: string; sub: string }[] = [
-    { id: 'Morning', label: 'Morning',   icon: '🌅', sub: '5am – 12pm' },
-    { id: 'Evening', label: 'Afternoon', icon: '☀️', sub: '12pm – 6pm' },
-    { id: 'Night',   label: 'Night',     icon: '🌙', sub: '6pm – 5am' },
-    { id: '',        label: 'Anytime',   icon: '⚡', sub: 'All day flexible' },
+  const timeBlocks: { id: '' | 'Morning' | 'Afternoon' | 'Night'; label: string; icon: string; sub: string }[] = [
+    { id: 'Morning',   label: 'Morning',   icon: '🌅', sub: '5am – 12pm' },
+    { id: 'Afternoon', label: 'Afternoon', icon: '☀️', sub: '12pm – 6pm' },
+    { id: 'Night',     label: 'Night',     icon: '🌙', sub: '6pm – 5am' },
+    { id: '',          label: 'Anytime',   icon: '⚡', sub: 'All day flexible' },
   ];
 
   const handleActionStyleChange = (style: 'check' | 'count' | 'timer') => {
@@ -1255,7 +1255,7 @@ interface CreateRoutineModalProps {
 export function CreateRoutineModal({ isOpen, onClose, onCreate }: CreateRoutineModalProps) {
   const [name, setName] = useState('');
   const [awardPoints, setAwardPoints] = useState(25);
-  const [timeBlock, setTimeBlock] = useState<'Morning' | 'Evening' | 'Night' | 'Constant'>('Morning');
+  const [timeBlock, setTimeBlock] = useState<'Morning' | 'Afternoon' | 'Evening' | 'Night' | 'Constant'>('Morning');
   const [category, setCategory] = useState<Category>('Fitness');
   const [repeat, setRepeat] = useState<'Daily' | 'Custom Days' | 'Today Only'>('Daily');
   const [habitLines, setHabitLines] = useState<string[]>(['']);
@@ -1306,10 +1306,10 @@ export function CreateRoutineModal({ isOpen, onClose, onCreate }: CreateRoutineM
   ];
 
   const timeBlocks: { id: typeof timeBlock; label: string; icon: string; activeClass: string }[] = [
-    { id: 'Morning',  label: 'Morning',   icon: '🌅',  activeClass: 'border-[#FDAF17] bg-[#FDAF17]/10 text-white shadow-md' },
-    { id: 'Evening',  label: 'Afternoon', icon: '☀️',  activeClass: 'border-[#F06A33] bg-[#F06A33]/10 text-white shadow-md' },
-    { id: 'Night',    label: 'Night',     icon: '🌙',  activeClass: 'border-[#7952B3] bg-[#7952B3]/10 text-white shadow-md' },
-    { id: 'Constant', label: 'Anytime',   icon: '⚡',  activeClass: 'border-[#12B886] bg-[#12B886]/10 text-white shadow-md' },
+    { id: 'Morning',   label: 'Morning',   icon: '🌅',  activeClass: 'border-[#FDAF17] bg-[#FDAF17]/10 text-white shadow-md' },
+    { id: 'Afternoon', label: 'Afternoon', icon: '☀️',  activeClass: 'border-[#F06A33] bg-[#F06A33]/10 text-white shadow-md' },
+    { id: 'Night',     label: 'Night',     icon: '🌙',  activeClass: 'border-[#7952B3] bg-[#7952B3]/10 text-white shadow-md' },
+    { id: 'Constant',  label: 'Anytime',   icon: '⚡',  activeClass: 'border-[#12B886] bg-[#12B886]/10 text-white shadow-md' },
   ];
 
   return (

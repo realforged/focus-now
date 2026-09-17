@@ -399,7 +399,7 @@ function AppInner() {
   const handleCreateRoutineSubmit = async (rtData: {
     name: string;
     points: number;
-    timeBlock: 'Morning' | 'Evening' | 'Night' | 'Constant';
+    timeBlock: 'Morning' | 'Afternoon' | 'Evening' | 'Night' | 'Constant';
     category: Category;
     repeat: 'Daily' | 'Custom Days' | 'Today Only';
     habitNames: string[];

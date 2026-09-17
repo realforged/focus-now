@@ -1146,7 +1146,7 @@ export const api = {
   async createRoutine(rtData: {
     name: string;
     points: number;
-    timeBlock: 'Morning' | 'Evening' | 'Night' | 'Constant';
+    timeBlock: 'Morning' | 'Afternoon' | 'Evening' | 'Night' | 'Constant';
     repeat: 'Daily' | 'Custom Days' | 'Today Only';
     habitIds: string[];
   }): Promise<Routine> {
@@ -1232,7 +1232,7 @@ export const api = {
   async updateRoutine(routineId: string, rtData: {
     name?: string;
     points?: number;
-    timeBlock?: 'Morning' | 'Evening' | 'Night' | 'Constant';
+    timeBlock?: 'Morning' | 'Afternoon' | 'Evening' | 'Night' | 'Constant';
     repeat?: 'Daily' | 'Custom Days' | 'Today Only';
   }): Promise<void> {
     const userId = await getEffectiveUserId();

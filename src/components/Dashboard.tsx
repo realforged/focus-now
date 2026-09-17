@@ -433,10 +433,11 @@ export default function Dashboard({
   const getHabitTimeframe = (habit: Habit): 'Morning' | 'Afternoon' | 'Night' | 'Anytime' => {
     const parentRoutine = routines.find(r => r.habitIds.includes(habit.id) || habit.routineId === r.id);
     if (parentRoutine) {
-      if (parentRoutine.timeBlock === 'Morning')  return 'Morning';
-      if (parentRoutine.timeBlock === 'Evening')  return 'Afternoon'; // stored as Evening = daytime
-      if (parentRoutine.timeBlock === 'Night')    return 'Night';
-      if (parentRoutine.timeBlock === 'Constant') return 'Anytime';
+      if (parentRoutine.timeBlock === 'Morning')   return 'Morning';
+      if (parentRoutine.timeBlock === 'Afternoon') return 'Afternoon';
+      if (parentRoutine.timeBlock === 'Evening')   return 'Afternoon'; // legacy 'Evening' stored values map to Afternoon
+      if (parentRoutine.timeBlock === 'Night')     return 'Night';
+      if (parentRoutine.timeBlock === 'Constant')  return 'Anytime';
     }
     if (habit.timeOfDay) {
       const tod = habit.timeOfDay.toLowerCase().trim();
@@ -450,9 +451,9 @@ export default function Dashboard({
         if (hour >= 12 && hour < 18) return 'Afternoon';
         return 'Night';
       }
-      if (tod.includes('morning'))                              return 'Morning';
-      if (tod.includes('afternoon') || tod.includes('noon'))   return 'Afternoon';
-      if (tod.includes('evening') || tod.includes('night'))    return 'Night';
+      if (tod.includes('morning')) return 'Morning';
+      if (tod.includes('afternoon') || tod.includes('noon') || tod.includes('evening') || tod.includes('midday') || tod.includes('lunch')) return 'Afternoon';
+      if (tod.includes('night') || tod.includes('bed') || tod.includes('sleep') || tod.includes('late')) return 'Night';
     }
     return 'Anytime';
   };

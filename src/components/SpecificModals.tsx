@@ -204,7 +204,7 @@ export function CreateWorkoutModal({ isOpen, onClose, onCreateWorkout }: CreateW
   const [target, setTarget] = useState<number | string>(30);
   const [unit, setUnit] = useState('min');
   const [points, setPoints] = useState(15);
-  const [timeBlock, setTimeBlock] = useState<'' | 'Morning' | 'Evening' | 'Night'>('');
+  const [timeBlock, setTimeBlock] = useState<'' | 'Morning' | 'Afternoon' | 'Evening' | 'Night'>('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -312,9 +312,9 @@ export function CreateWorkoutModal({ isOpen, onClose, onCreateWorkout }: CreateW
                 className="w-full bg-[#141620] border border-[#2C3246] rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-rose-500"
               >
                 <option value="">Anytime</option>
-                <option value="Morning">☀️ Morning</option>
-                <option value="Evening">🌇 Evening</option>
-                <option value="Night">🌙 Night</option>
+                <option value="Morning">🌅 Morning (5am – 12pm)</option>
+                <option value="Afternoon">☀️ Afternoon (12pm – 6pm)</option>
+                <option value="Night">🌙 Night (6pm – 5am)</option>
               </select>
             </div>
           </div>
@@ -342,7 +342,7 @@ export function CreateGoalModal({ isOpen, onClose, onCreateGoal }: CreateGoalMod
   const [target, setTarget] = useState<number | string>(1);
   const [unit, setUnit] = useState('completion');
   const [points, setPoints] = useState(25);
-  const [timeBlock, setTimeBlock] = useState<'' | 'Morning' | 'Evening' | 'Night'>('');
+  const [timeBlock, setTimeBlock] = useState<'' | 'Morning' | 'Afternoon' | 'Evening' | 'Night'>('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -444,9 +444,9 @@ export function CreateGoalModal({ isOpen, onClose, onCreateGoal }: CreateGoalMod
                 className="w-full bg-[#141620] border border-[#2C3246] rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
               >
                 <option value="">Anytime</option>
-                <option value="Morning">☀️ Morning</option>
-                <option value="Evening">🌇 Evening</option>
-                <option value="Night">🌙 Night</option>
+                <option value="Morning">🌅 Morning (5am – 12pm)</option>
+                <option value="Afternoon">☀️ Afternoon (12pm – 6pm)</option>
+                <option value="Night">🌙 Night (6pm – 5am)</option>
               </select>
             </div>
           </div>
