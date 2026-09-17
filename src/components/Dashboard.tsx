@@ -329,12 +329,13 @@ export default function Dashboard({
   // Targets alias pointing to state
   const targets = dietTargets;
 
-  // Time-aware greeting
+  // Time-aware greeting (Morning, Afternoon, Evening, Night)
   const getGreeting = () => {
     const hr = new Date().getHours();
-    if (hr >= 4 && hr < 12) return 'Good morning';
-    if (hr >= 12 && hr < 18) return 'Good afternoon';
-    return 'Good evening';
+    if (hr >= 5 && hr < 12) return 'Good morning';
+    if (hr >= 12 && hr < 17) return 'Good afternoon';
+    if (hr >= 17 && hr < 21) return 'Good evening';
+    return 'Good night';
   };
 
   // 90 Day calculations
@@ -415,27 +416,29 @@ export default function Dashboard({
   // Filter Focus Habits (Starred and scheduled for today)
   const focusHabits = habits.filter(h => starredHabits.includes(h.id) && isHabitScheduledForDate(h, dateToday));
 
-  // THREE TIMELINES: Morning 5am-12pm | Afternoon 12pm-6pm | Night 6pm-5am
+  // FOUR TIMELINES: Morning (5am–12pm) | Afternoon (12pm–5pm) | Evening (5pm–9pm) | Night (9pm–5am)
   const TIME_LABELS = {
     Morning:   { emoji: '🌅', label: 'Morning',   range: '5am–12pm' },
-    Afternoon: { emoji: '☀️', label: 'Afternoon', range: '12pm–6pm' },
-    Night:     { emoji: '🌙', label: 'Night',      range: '6pm–5am' },
+    Afternoon: { emoji: '☀️', label: 'Afternoon', range: '12pm–5pm' },
+    Evening:   { emoji: '🌇', label: 'Evening',   range: '5pm–9pm' },
+    Night:     { emoji: '🌙', label: 'Night',      range: '9pm–5am' },
   } as const;
 
-  const [timeframeFilter, setTimeframeFilter] = useState<'All' | 'Morning' | 'Afternoon' | 'Night'>(() => {
+  const [timeframeFilter, setTimeframeFilter] = useState<'All' | 'Morning' | 'Afternoon' | 'Evening' | 'Night'>(() => {
     const hr = new Date().getHours();
     if (hr >= 5 && hr < 12) return 'Morning';
-    if (hr >= 12 && hr < 18) return 'Afternoon';
+    if (hr >= 12 && hr < 17) return 'Afternoon';
+    if (hr >= 17 && hr < 21) return 'Evening';
     return 'Night';
   });
 
-  // Maps any habit to one of our 3 display timelines
-  const getHabitTimeframe = (habit: Habit): 'Morning' | 'Afternoon' | 'Night' | 'Anytime' => {
+  // Maps any habit to one of our 4 display timelines
+  const getHabitTimeframe = (habit: Habit): 'Morning' | 'Afternoon' | 'Evening' | 'Night' | 'Anytime' => {
     const parentRoutine = routines.find(r => r.habitIds.includes(habit.id) || habit.routineId === r.id);
     if (parentRoutine) {
       if (parentRoutine.timeBlock === 'Morning')   return 'Morning';
       if (parentRoutine.timeBlock === 'Afternoon') return 'Afternoon';
-      if (parentRoutine.timeBlock === 'Evening')   return 'Afternoon'; // legacy 'Evening' stored values map to Afternoon
+      if (parentRoutine.timeBlock === 'Evening')   return 'Evening';
       if (parentRoutine.timeBlock === 'Night')     return 'Night';
       if (parentRoutine.timeBlock === 'Constant')  return 'Anytime';
     }
@@ -448,11 +451,13 @@ export default function Dashboard({
         if (match[3] === 'pm' && hour < 12) hour += 12;
         if (match[3] === 'am' && hour === 12) hour = 0;
         if (hour >= 5 && hour < 12) return 'Morning';
-        if (hour >= 12 && hour < 18) return 'Afternoon';
+        if (hour >= 12 && hour < 17) return 'Afternoon';
+        if (hour >= 17 && hour < 21) return 'Evening';
         return 'Night';
       }
       if (tod.includes('morning')) return 'Morning';
-      if (tod.includes('afternoon') || tod.includes('noon') || tod.includes('evening') || tod.includes('midday') || tod.includes('lunch')) return 'Afternoon';
+      if (tod.includes('afternoon') || tod.includes('noon') || tod.includes('midday') || tod.includes('lunch')) return 'Afternoon';
+      if (tod.includes('evening') || tod.includes('sunset') || tod.includes('dusk')) return 'Evening';
       if (tod.includes('night') || tod.includes('bed') || tod.includes('sleep') || tod.includes('late')) return 'Night';
     }
     return 'Anytime';
@@ -1063,12 +1068,13 @@ export default function Dashboard({
               </button>
             )}
 
-            {/* Timeframe Filter Pills — 3 Timelines */}
+            {/* Timeframe Filter Pills — 4 Timelines */}
             <div className="flex bg-gray-100 p-1 rounded-xl gap-0.5">
               {([
                 { id: 'All',       emoji: '⚡', label: 'All' },
                 { id: 'Morning',   emoji: '🌅', label: 'Morning' },
                 { id: 'Afternoon', emoji: '☀️', label: 'Afternoon' },
+                { id: 'Evening',   emoji: '🌇', label: 'Evening' },
                 { id: 'Night',     emoji: '🌙', label: 'Night' },
               ] as const).map(tf => (
                 <button

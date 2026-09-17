@@ -313,8 +313,9 @@ export function CreateWorkoutModal({ isOpen, onClose, onCreateWorkout }: CreateW
               >
                 <option value="">Anytime</option>
                 <option value="Morning">🌅 Morning (5am – 12pm)</option>
-                <option value="Afternoon">☀️ Afternoon (12pm – 6pm)</option>
-                <option value="Night">🌙 Night (6pm – 5am)</option>
+                <option value="Afternoon">☀️ Afternoon (12pm – 5pm)</option>
+                <option value="Evening">🌇 Evening (5pm – 9pm)</option>
+                <option value="Night">🌙 Night (9pm – 5am)</option>
               </select>
             </div>
           </div>
@@ -445,8 +446,9 @@ export function CreateGoalModal({ isOpen, onClose, onCreateGoal }: CreateGoalMod
               >
                 <option value="">Anytime</option>
                 <option value="Morning">🌅 Morning (5am – 12pm)</option>
-                <option value="Afternoon">☀️ Afternoon (12pm – 6pm)</option>
-                <option value="Night">🌙 Night (6pm – 5am)</option>
+                <option value="Afternoon">☀️ Afternoon (12pm – 5pm)</option>
+                <option value="Evening">🌇 Evening (5pm – 9pm)</option>
+                <option value="Night">🌙 Night (9pm – 5am)</option>
               </select>
             </div>
           </div>

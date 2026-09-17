@@ -474,10 +474,11 @@ export function CreateHabitModal({
     },
   ];
 
-  const timeBlocks: { id: '' | 'Morning' | 'Afternoon' | 'Night'; label: string; icon: string; sub: string }[] = [
+  const timeBlocks: { id: '' | 'Morning' | 'Afternoon' | 'Evening' | 'Night'; label: string; icon: string; sub: string }[] = [
     { id: 'Morning',   label: 'Morning',   icon: '🌅', sub: '5am – 12pm' },
-    { id: 'Afternoon', label: 'Afternoon', icon: '☀️', sub: '12pm – 6pm' },
-    { id: 'Night',     label: 'Night',     icon: '🌙', sub: '6pm – 5am' },
+    { id: 'Afternoon', label: 'Afternoon', icon: '☀️', sub: '12pm – 5pm' },
+    { id: 'Evening',   label: 'Evening',   icon: '🌇', sub: '5pm – 9pm' },
+    { id: 'Night',     label: 'Night',     icon: '🌙', sub: '9pm – 5am' },
     { id: '',          label: 'Anytime',   icon: '⚡', sub: 'All day flexible' },
   ];
 
@@ -750,7 +751,7 @@ export function CreateHabitModal({
                       </span>
                       {p.timeBlock && (
                         <span className="bg-[#191D2A] px-2 py-0.5 rounded-md border border-[#252B3C]">
-                          {p.timeBlock === 'Morning' ? '🌅 Morning' : p.timeBlock === 'Evening' ? '☀️ Afternoon' : '🌙 Night'}
+                          {p.timeBlock === 'Morning' ? '🌅 Morning' : p.timeBlock === 'Afternoon' ? '☀️ Afternoon' : p.timeBlock === 'Evening' ? '🌇 Evening' : '🌙 Night'}
                         </span>
                       )}
                     </div>
@@ -1308,6 +1309,7 @@ export function CreateRoutineModal({ isOpen, onClose, onCreate }: CreateRoutineM
   const timeBlocks: { id: typeof timeBlock; label: string; icon: string; activeClass: string }[] = [
     { id: 'Morning',   label: 'Morning',   icon: '🌅',  activeClass: 'border-[#FDAF17] bg-[#FDAF17]/10 text-white shadow-md' },
     { id: 'Afternoon', label: 'Afternoon', icon: '☀️',  activeClass: 'border-[#F06A33] bg-[#F06A33]/10 text-white shadow-md' },
+    { id: 'Evening',   label: 'Evening',   icon: '🌇',  activeClass: 'border-[#E64980] bg-[#E64980]/10 text-white shadow-md' },
     { id: 'Night',     label: 'Night',     icon: '🌙',  activeClass: 'border-[#7952B3] bg-[#7952B3]/10 text-white shadow-md' },
     { id: 'Constant',  label: 'Anytime',   icon: '⚡',  activeClass: 'border-[#12B886] bg-[#12B886]/10 text-white shadow-md' },
   ];
