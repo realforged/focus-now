@@ -516,27 +516,26 @@ export default function HabitsPage({
                                 </button>
 
                                 {/* Habit Name & Metadata */}
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <h3
-                                      className={`text-sm font-black truncate ${
-                                        isCompleted ? 'line-through text-gray-400' : 'text-gray-900'
-                                      }`}
-                                    >
-                                      {habit.name}
-                                    </h3>
-                                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${pillar.bg} ${pillar.text}`}>
+                                <div className="flex-1 min-w-0 pr-1">
+                                  <h3
+                                    className={`text-sm font-black break-words line-clamp-2 leading-snug ${
+                                      isCompleted ? 'line-through text-gray-400' : 'text-gray-900'
+                                    }`}
+                                    title={habit.name}
+                                  >
+                                    {habit.name}
+                                  </h3>
+                                  <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase shrink-0 ${pillar.bg} ${pillar.text}`}>
                                       {habit.category}
                                     </span>
-                                  </div>
-                                  <div className="flex items-center gap-2 mt-0.5">
-                                    <span className="text-[11px] font-mono text-gray-400">
+                                    <span className="text-[10px] sm:text-[11px] font-mono text-gray-400 shrink-0">
                                       {currentVal} / {habit.target} {habit.unit}
                                     </span>
                                     <button
                                       type="button"
                                       onClick={() => toggleExpandHabit(habit.id)}
-                                      className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-lg transition cursor-pointer ${
+                                      className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 sm:px-2 py-0.5 rounded-lg transition cursor-pointer shrink-0 ${
                                         subHabits.length > 0
                                           ? isExpanded
                                             ? 'bg-emerald-100 text-emerald-700'
@@ -545,7 +544,7 @@ export default function HabitsPage({
                                       }`}
                                     >
                                       <ListChecks className="w-3 h-3" />
-                                      <span>{subHabits.length > 0 ? `${doneSubCount}/${subHabits.length} steps` : '+ Step'}</span>
+                                      <span>{subHabits.length > 0 ? `${doneSubCount}/${subHabits.length}` : '+ Step'}</span>
                                       {isExpanded ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
                                     </button>
                                   </div>
@@ -733,31 +732,34 @@ export default function HabitsPage({
                               {isCompleted && <Check className="w-3.5 h-3.5 stroke-[3px]" />}
                             </button>
 
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <h3 className={`text-sm font-black truncate ${isCompleted ? 'line-through text-gray-400' : 'text-gray-900'}`}>
-                                  {habit.name}
-                                </h3>
+                            <div className="flex-1 min-w-0 pr-1">
+                              <h3
+                                className={`text-sm font-black break-words line-clamp-2 leading-snug ${
+                                  isCompleted ? 'line-through text-gray-400' : 'text-gray-900'
+                                }`}
+                                title={habit.name}
+                              >
+                                {habit.name}
+                              </h3>
+                              <div className="flex flex-wrap items-center gap-1.5 mt-1">
                                 {(() => {
                                   const tf = classifyHabitTimeframe(habit, routines);
                                   if (tf === 'Anytime') return null;
                                   const icon = tf === 'Morning' ? '🌅' : tf === 'Afternoon' ? '☀️' : tf === 'Evening' ? '🌇' : '🌙';
                                   return (
-                                    <span className="text-[9px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                                    <span className="text-[9px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-md flex items-center gap-0.5 shrink-0">
                                       <span>{icon}</span>
                                       <span>{tf}</span>
                                     </span>
                                   );
                                 })()}
-                              </div>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-[10px] font-mono text-gray-400">
+                                <span className="text-[10px] font-mono text-gray-400 shrink-0">
                                   {currentVal}/{habit.target} {habit.unit}
                                 </span>
                                 <button
                                   type="button"
                                   onClick={() => toggleExpandHabit(habit.id)}
-                                  className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-lg transition cursor-pointer ${
+                                  className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 sm:px-2 py-0.5 rounded-lg transition cursor-pointer shrink-0 ${
                                     subHabits.length > 0
                                       ? isExpanded
                                         ? 'bg-emerald-100 text-emerald-700'
@@ -766,7 +768,7 @@ export default function HabitsPage({
                                   }`}
                                 >
                                   <ListChecks className="w-3 h-3" />
-                                  <span>{subHabits.length > 0 ? `${doneSubCount}/${subHabits.length} steps` : '+ Step'}</span>
+                                  <span>{subHabits.length > 0 ? `${doneSubCount}/${subHabits.length}` : '+ Step'}</span>
                                   {isExpanded ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
                                 </button>
                               </div>

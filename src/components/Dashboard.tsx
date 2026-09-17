@@ -1039,28 +1039,43 @@ export default function Dashboard({
       </div>
 
       {/* ── DAILY DISCIPLINES & IMMEDIATE ACTION (FRONT & CENTER) ── */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-4">
+      <div className="bg-white border border-gray-100 rounded-2xl p-3.5 sm:p-5 shadow-sm space-y-3 sm:space-y-4">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
-              <CheckCircle2 className="w-4 h-4" />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="flex items-center justify-between w-full sm:w-auto">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-gray-900 leading-tight">Daily Disciplines</h3>
+                <p className="text-[11px] text-gray-400 font-semibold mt-0.5">
+                  {filteredHabits.filter(h => (h.history[dateToday] || 0) >= h.target).length} of {filteredHabits.length} completed
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-base font-black text-gray-900 leading-tight">Daily Disciplines</h3>
-              <p className="text-[11px] text-gray-400 font-semibold mt-0.5">
-                {filteredHabits.filter(h => (h.history[dateToday] || 0) >= h.target).length} of {filteredHabits.length} completed
-              </p>
-            </div>
+
+            {/* Mobile-only quick Add button in title row */}
+            {openCreateHabit && (
+              <button
+                type="button"
+                onClick={() => openCreateHabit(timeframeFilter === 'All' ? undefined : timeframeFilter)}
+                className="sm:hidden flex items-center gap-1 bg-gray-900 hover:bg-gray-800 text-white px-2.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer active:scale-95 shrink-0"
+                title={`Create new habit${timeframeFilter !== 'All' ? ` for ${timeframeFilter}` : ''}`}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add</span>
+              </button>
+            )}
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar max-w-full pb-0.5 sm:pb-0">
             {/* Active Pillar Filter Chip */}
             {selectedCategoryId && (
               <button
                 type="button"
                 onClick={() => setSelectedCategoryId(null)}
-                className="flex items-center gap-1 text-[10px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 px-2 py-1 rounded-lg border border-purple-200 transition cursor-pointer"
+                className="flex items-center gap-1 text-[10px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 px-2 py-1 rounded-lg border border-purple-200 transition cursor-pointer shrink-0"
                 title="Clear pillar filter"
               >
                 <span>{selectedCategoryId}</span>
@@ -1069,7 +1084,7 @@ export default function Dashboard({
             )}
 
             {/* Timeframe Filter Pills — 4 Timelines */}
-            <div className="flex bg-gray-100 p-1 rounded-xl gap-0.5">
+            <div className="flex bg-gray-100 p-1 rounded-xl gap-0.5 shrink-0">
               {([
                 { id: 'All',       emoji: '⚡', label: 'All' },
                 { id: 'Morning',   emoji: '🌅', label: 'Morning' },
@@ -1081,7 +1096,7 @@ export default function Dashboard({
                   key={tf.id}
                   type="button"
                   onClick={() => setTimeframeFilter(tf.id)}
-                  className={`flex items-center gap-0.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition cursor-pointer ${
+                  className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition cursor-pointer whitespace-nowrap ${
                     timeframeFilter === tf.id
                       ? 'bg-white text-gray-900 shadow-xs'
                       : 'text-gray-500 hover:text-gray-800'
@@ -1093,11 +1108,12 @@ export default function Dashboard({
               ))}
             </div>
 
+            {/* Desktop Add Button */}
             {openCreateHabit && (
               <button
                 type="button"
                 onClick={() => openCreateHabit(timeframeFilter === 'All' ? undefined : timeframeFilter)}
-                className="flex items-center gap-1 bg-gray-900 hover:bg-gray-800 text-white px-2.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer active:scale-95 shrink-0"
+                className="hidden sm:flex items-center gap-1 bg-gray-900 hover:bg-gray-800 text-white px-2.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer active:scale-95 shrink-0"
                 title={`Create new habit${timeframeFilter !== 'All' ? ` for ${timeframeFilter}` : ''}`}
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -1145,12 +1161,17 @@ export default function Dashboard({
                       >
                         {isCompleted && <Check className="w-3.5 h-3.5 stroke-[3px]" />}
                       </button>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`text-xs font-black truncate ${isCompleted ? 'line-through text-gray-400' : 'text-gray-900'}`}>
-                            {habit.name}
-                          </span>
-                          <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase" style={{ backgroundColor: tint, color }}>
+                      <div className="min-w-0 flex-1 pr-1">
+                        <h4
+                          className={`text-xs sm:text-sm font-black break-words line-clamp-1 sm:line-clamp-2 leading-tight ${
+                            isCompleted ? 'line-through text-gray-400' : 'text-gray-900'
+                          }`}
+                          title={habit.name}
+                        >
+                          {habit.name}
+                        </h4>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                          <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase shrink-0" style={{ backgroundColor: tint, color }}>
                             {habit.category}
                           </span>
                           {(() => {
@@ -1158,16 +1179,16 @@ export default function Dashboard({
                             if (tf === 'Anytime') return null;
                             const icon = tf === 'Morning' ? '🌅' : tf === 'Afternoon' ? '☀️' : tf === 'Evening' ? '🌇' : '🌙';
                             return (
-                              <span className="text-[8px] font-medium text-gray-500 bg-gray-100 px-1 py-0.5 rounded flex items-center gap-0.5">
+                              <span className="text-[8px] font-medium text-gray-500 bg-gray-100 px-1 py-0.5 rounded flex items-center gap-0.5 shrink-0">
                                 <span>{icon}</span>
                                 <span>{tf}</span>
                               </span>
                             );
                           })()}
+                          <span className="text-[10px] font-mono text-gray-400 shrink-0">
+                            {currentVal} / {habit.target} {habit.unit}
+                          </span>
                         </div>
-                        <span className="text-[10px] font-mono text-gray-400">
-                          {currentVal} / {habit.target} {habit.unit}
-                        </span>
                       </div>
                     </div>
                     <button
@@ -1222,12 +1243,12 @@ export default function Dashboard({
                       : 'bg-gray-50/60 border-gray-100 hover:border-gray-200'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center justify-between gap-2.5 sm:gap-3">
                     {/* Left Circle Checkmark Target */}
                     <button
                       type="button"
                       onClick={() => onLogHabit(habit.id, isCompleted ? 0 : habit.target)}
-                      className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition cursor-pointer active:scale-90 ${
+                      className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center shrink-0 transition cursor-pointer active:scale-90 ${
                         isCompleted
                           ? 'bg-[#10B981] text-white shadow-sm'
                           : 'border-2 border-gray-300 hover:border-emerald-500 bg-white'
@@ -1238,17 +1259,18 @@ export default function Dashboard({
                     </button>
 
                     {/* Habit Details */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h4
-                          className={`text-sm font-black truncate ${
-                            isCompleted ? 'line-through text-gray-400' : 'text-gray-900'
-                          }`}
-                        >
-                          {habit.name}
-                        </h4>
+                    <div className="flex-1 min-w-0 pr-1">
+                      <h4
+                        className={`text-sm font-black break-words line-clamp-2 leading-snug ${
+                          isCompleted ? 'line-through text-gray-400' : 'text-gray-900'
+                        }`}
+                        title={habit.name}
+                      >
+                        {habit.name}
+                      </h4>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
                         <span
-                          className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase"
+                          className="text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase shrink-0"
                           style={{ backgroundColor: tint, color }}
                         >
                           {habit.category}
@@ -1258,21 +1280,19 @@ export default function Dashboard({
                           if (tf === 'Anytime') return null;
                           const icon = tf === 'Morning' ? '🌅' : tf === 'Afternoon' ? '☀️' : tf === 'Evening' ? '🌇' : '🌙';
                           return (
-                            <span className="text-[9px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                            <span className="text-[9px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-md flex items-center gap-0.5 shrink-0">
                               <span>{icon}</span>
                               <span>{tf}</span>
                             </span>
                           );
                         })()}
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[11px] font-mono text-gray-400">
+                        <span className="text-[10px] sm:text-[11px] font-mono text-gray-400 shrink-0">
                           {currentVal} / {habit.target} {habit.unit}
                         </span>
                         <button
                           type="button"
                           onClick={() => toggleExpandHabit(habit.id)}
-                          className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-lg transition cursor-pointer ${
+                          className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 sm:px-2 py-0.5 rounded-lg transition cursor-pointer shrink-0 ${
                             subHabits.length > 0
                               ? isExpanded
                                 ? 'bg-emerald-100 text-emerald-700'
@@ -1281,18 +1301,18 @@ export default function Dashboard({
                           }`}
                         >
                           <ListChecks className="w-3 h-3" />
-                          <span>{subHabits.length > 0 ? `${doneSubCount}/${subHabits.length} steps` : '+ Step'}</span>
+                          <span>{subHabits.length > 0 ? `${doneSubCount}/${subHabits.length}` : '+ Step'}</span>
                           {isExpanded ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
                         </button>
                       </div>
                     </div>
 
                     {/* Right Actions */}
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                       <button
                         type="button"
                         onClick={() => toggleStarHabit(habit.id)}
-                        className={`p-1.5 rounded-lg transition cursor-pointer ${
+                        className={`p-1 sm:p-1.5 rounded-lg transition cursor-pointer ${
                           isStarred ? 'text-amber-400' : 'text-gray-300 hover:text-amber-300'
                         }`}
                         title="Pin to priority focus"
@@ -1304,7 +1324,7 @@ export default function Dashboard({
                         <button
                           type="button"
                           onClick={() => onLogHabit(habit.id, habit.type === 'Timer' ? 5 : 1)}
-                          className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-extrabold transition cursor-pointer active:scale-95"
+                          className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-extrabold transition cursor-pointer active:scale-95 shrink-0"
                         >
                           {habit.type === 'Timer' ? '+5m' : '+1'}
                         </button>
